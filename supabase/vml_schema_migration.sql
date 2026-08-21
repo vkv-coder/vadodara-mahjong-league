@@ -397,7 +397,13 @@ grant execute on function public.vml_reject_match(uuid,text) to authenticated;
 
 -- Public, no auth required: the leaderboard itself. Only ever exposes
 -- member_id/name/points/games — never email/mobile/payment fields.
-create or replace function public.vml_public_leaderboard(p_category text)
+-- Combines both categories into one ranking: rank_points (30/20/10/5) use
+-- the same scale in traditional and taiwanese matches, so the leaderboard
+-- is a single unified ranking — category only matters when logging a match
+-- (it determines the 140000/2040 pool-total validation), not when ranking.
+drop function if exists public.vml_public_leaderboard(text);
+
+create or replace function public.vml_public_leaderboard()
 returns table(member_id text, name text, points bigint, games bigint)
 language sql
 security definer
@@ -409,14 +415,14 @@ as $$
          count(e.id)::bigint as games
   from vml_players p
   join vml_match_entries e on e.player_id = p.id
-  join vml_matches m on m.id = e.match_id and m.status = 'confirmed' and m.category = p_category
+  join vml_matches m on m.id = e.match_id and m.status = 'confirmed'
   where p.status = 'active' and p.expires_at > now()
   group by p.member_id, p.name
   order by points desc;
 $$;
 
-revoke all on function public.vml_public_leaderboard(text) from public;
-grant execute on function public.vml_public_leaderboard(text) to anon, authenticated;
+revoke all on function public.vml_public_leaderboard() from public;
+grant execute on function public.vml_public_leaderboard() to anon, authenticated;
 
 -- Looks up an active member by their member_id (used when adding the other
 -- 3 players to a match by ID).

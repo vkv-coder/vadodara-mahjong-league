@@ -11,14 +11,10 @@
 :root{--bg:#EAF4EA;--surface:#F5FAF6;--card:#FFFFFF;--border:#D7E8DA;--gold:#2E9E60;--gold-light:#3FBE79;--text:#1B4D2E;--muted:#5B6B5B;--radius:12px;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
-.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
-.header-title{font-family:'Noto Serif Display',serif;font-size:18px;color:var(--gold);}
-.header-sub{font-size:11px;color:var(--muted);margin-top:1px;}
-.header a{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:6px;font-size:11px;text-decoration:none;}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;position:relative;}
+.header-title{font-family:'Noto Serif Display',serif;font-size:19px;font-weight:700;color:var(--gold);text-align:center;}
+.header a{position:absolute;left:20px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:6px;font-size:11px;text-decoration:none;}
 .main{max-width:480px;margin:0 auto;padding:20px 16px 80px;}
-.cat-tabs{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:20px;overflow:hidden;}
-.cat-tab{flex:1;padding:11px 8px;border:none;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.2s;text-align:center;}
-.cat-tab.active{background:var(--gold);color:#fff;}
 .loading{text-align:center;padding:32px;color:var(--muted);font-size:13px;}
 .spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 10px;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -56,19 +52,11 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 <body>
 
 <div class="header">
-  <div>
-    <div class="header-title">🏆 Leaderboard</div>
-    <div class="header-sub">Vadodara Mahjong League</div>
-  </div>
   <a href="index.html">← Home</a>
+  <div class="header-title">🏆 Vadodara Mahjong League</div>
 </div>
 
 <div class="main">
-  <div class="cat-tabs">
-    <button class="cat-tab active" onclick="switchCat('traditional',this)">🀄 Traditional</button>
-    <button class="cat-tab" onclick="switchCat('taiwanese',this)">🏆 Taiwanese</button>
-  </div>
-
   <div id="lb-loading" class="loading"><div class="spinner"></div>Loading leaderboard...</div>
 
   <div id="lb-content" style="display:none;">
@@ -90,16 +78,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/vml-common.js"></script>
 <script>
-var currentCat = 'traditional';
-
 window.addEventListener('DOMContentLoaded', function () { loadLeaderboard(); });
-
-function switchCat(cat, btn) {
-  currentCat = cat;
-  document.querySelectorAll('.cat-tab').forEach(function (b) { b.classList.remove('active'); });
-  btn.classList.add('active');
-  loadLeaderboard();
-}
 
 async function loadLeaderboard() {
   document.getElementById('lb-loading').style.display = 'block';
@@ -107,7 +86,7 @@ async function loadLeaderboard() {
   document.getElementById('lb-empty').style.display = 'none';
 
   try {
-    var { data, error } = await vmlClient.rpc('vml_public_leaderboard', { p_category: currentCat });
+    var { data, error } = await vmlClient.rpc('vml_public_leaderboard');
     if (error) throw error;
 
     var rows = data || [];
