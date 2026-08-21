@@ -508,7 +508,7 @@ security definer
 set search_path = public, extensions
 as $$
 begin
-  if not coalesce((select is_admin from vml_players where id = auth.uid()), false) then
+  if not coalesce((select vp.is_admin from vml_players vp where vp.id = auth.uid()), false) then
     raise exception 'Admin access required';
   end if;
 
@@ -532,7 +532,7 @@ security definer
 set search_path = public, extensions
 as $$
 begin
-  if not coalesce((select is_admin from vml_players where id = auth.uid()), false) then
+  if not coalesce((select vp.is_admin from vml_players vp where vp.id = auth.uid()), false) then
     raise exception 'Admin access required';
   end if;
 
@@ -559,7 +559,7 @@ security definer
 set search_path = public, extensions
 as $$
 begin
-  if not coalesce((select is_admin from vml_players where id = auth.uid()), false) then
+  if not coalesce((select vp.is_admin from vml_players vp where vp.id = auth.uid()), false) then
     raise exception 'Admin access required';
   end if;
 
