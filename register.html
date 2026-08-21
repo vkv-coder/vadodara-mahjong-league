@@ -112,6 +112,12 @@ function showStatusCard(status) {
     titleEl.textContent = 'Registration not approved';
     textEl.innerHTML = 'Contact <a href="mailto:support@vadodaramahjongleague.com">support</a> if you think this is a mistake.';
   }
+  textEl.innerHTML += '<br/><br/><a href="#" onclick="logoutAndRegisterAnother();return false;">Not you? Log out and register a different account →</a>';
+}
+
+async function logoutAndRegisterAnother() {
+  await vmlClient.auth.signOut();
+  window.location.reload();
 }
 
 function showMsg(elId, text, type) {
