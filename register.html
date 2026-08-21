@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Register — Vadodara Mahjong League</title>
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#EAF4EA" />
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EAF4EA;--surface:#F5FAF6;--card:#FFFFFF;--border:#D7E8DA;--gold:#2E9E60;--text:#1B4D2E;--muted:#5B6B5B;--radius:12px;--red:#c0392b;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+.header-title{font-family:'Noto Serif Display',serif;font-size:18px;color:var(--gold);}
+.header a{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:6px;font-size:11px;text-decoration:none;}
+.main{max-width:420px;margin:0 auto;padding:24px 16px 80px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+.card h2{font-size:15px;margin-bottom:14px;}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;}
+input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:11px 14px;border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;outline:none;margin-bottom:14px;}
+input:focus{border-color:var(--gold);}
+.btn{display:block;width:100%;padding:14px;border-radius:10px;font-weight:600;font-size:15px;text-align:center;border:none;cursor:pointer;font-family:'Inter',sans-serif;background:var(--gold);color:#fff;}
+.btn:disabled{opacity:0.6;cursor:not-allowed;}
+.msg{font-size:13px;margin-top:10px;padding:10px;border-radius:8px;}
+.msg.error{background:#FBEAEA;color:var(--red);}
+.msg.success{background:#E3F5E8;color:#1E7A46;}
+.fee-note{font-size:12px;color:var(--muted);margin-bottom:14px;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">🀄 Register</div>
+  <a href="/index.html">← Home</a>
+</div>
+
+<div class="main">
+
+  <div class="card" id="signup-card">
+    <h2>Create your account</h2>
+    <label>Full Name</label>
+    <input type="text" id="r-name" placeholder="Your full name">
+    <label>Mobile</label>
+    <input type="tel" id="r-mobile" placeholder="10-digit mobile number">
+    <label>Email</label>
+    <input type="email" id="r-email" placeholder="you@example.com">
+    <label>Password</label>
+    <input type="password" id="r-password" placeholder="Choose a password">
+    <button class="btn" id="signup-btn" onclick="doSignup()">Create Account & Continue</button>
+    <div id="signup-msg"></div>
+  </div>
+
+  <div class="card" id="payment-card" style="display:none;">
+    <h2>Membership Payment</h2>
+    <div class="fee-note">Annual membership fee: ₹<span id="fee-amount"></span>. Valid for 12 months from today; renew any time before it expires to keep your place on the leaderboard.</div>
+    <button class="btn" id="pay-btn" onclick="startPayment()">Pay & Submit for Approval</button>
+    <div id="payment-msg"></div>
+  </div>
+
+  <div class="card" id="pending-card" style="display:none;">
+    <h2>✅ Payment received</h2>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;">Your registration is now awaiting admin approval. You'll get an email with your member ID once approved.</p>
+  </div>
+
+  <div class="card" id="status-card" style="display:none;">
+    <h2 id="status-title"></h2>
+    <p id="status-text" style="font-size:13px;color:var(--muted);line-height:1.6;"></p>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/vml-common.js"></script>
+<script>
+var regName = '', regMobile = '', regEmail = '';
+
+window.addEventListener('DOMContentLoaded', async function () {
+  document.getElementById('fee-amount').textContent = REGISTRATION_FEE_INR;
+
+  var { data: { session } } = await vmlClient.auth.getSession();
+  if (session) {
+    var { data } = await vmlClient.rpc('vml_my_profile');
+    var profile = data && data[0];
+    if (profile && profile.status && profile.status !== 'pending_payment') {
+      showStatusCard(profile.status);
+      return;
+    }
+    // Signed in but not yet paid: skip the signup form, prefill from profile if present.
+    regName = (profile && profile.name) || '';
+    regMobile = (profile && profile.mobile) || '';
+    regEmail = (profile && profile.email) || session.user.email;
+    document.getElementById('signup-card').style.display = 'none';
+    document.getElementById('payment-card').style.display = 'block';
+  }
+});
+
+function showStatusCard(status) {
+  document.getElementById('signup-card').style.display = 'none';
+  document.getElementById('payment-card').style.display = 'none';
+  document.getElementById('status-card').style.display = 'block';
+  var titleEl = document.getElementById('status-title');
+  var textEl = document.getElementById('status-text');
+  if (status === 'pending_approval') {
+    titleEl.textContent = '⏳ Awaiting approval';
+    textEl.textContent = "You're already registered and your payment is confirmed. An admin still needs to approve your membership — you'll get an email once that happens.";
+  } else if (status === 'active') {
+    titleEl.textContent = '✅ Already a member';
+    textEl.innerHTML = 'You\'re already an approved member. <a href="/dashboard.html">Go to your dashboard →</a>';
+  } else if (status === 'rejected') {
+    titleEl.textContent = 'Registration not approved';
+    textEl.innerHTML = 'Contact <a href="mailto:support@vadodaramahjongleague.com">support</a> if you think this is a mistake.';
+  }
+}
+
+function showMsg(elId, text, type) {
+  document.getElementById(elId).innerHTML = '<div class="msg ' + type + '">' + text + '</div>';
+}
+
+async function doSignup() {
+  var name = document.getElementById('r-name').value.trim();
+  var mobile = document.getElementById('r-mobile').value.trim();
+  var email = document.getElementById('r-email').value.trim();
+  var password = document.getElementById('r-password').value;
+
+  if (!name || !mobile || !email || !password) {
+    showMsg('signup-msg', 'Please fill in every field.', 'error'); return;
+  }
+
+  document.getElementById('signup-btn').disabled = true;
+  regName = name; regMobile = mobile; regEmail = email;
+
+  var { data, error } = await vmlClient.auth.signUp({ email: email, password: password });
+  document.getElementById('signup-btn').disabled = false;
+
+  if (error) { showMsg('signup-msg', error.message, 'error'); return; }
+
+  if (!data.session) {
+    showMsg('signup-msg', '✅ Account created. Check your email to confirm it, then come back and log in to continue to payment.', 'success');
+    return;
+  }
+
+  document.getElementById('signup-card').style.display = 'none';
+  document.getElementById('payment-card').style.display = 'block';
+}
+
+async function startPayment() {
+  document.getElementById('pay-btn').disabled = true;
+  showMsg('payment-msg', 'Opening payment...', 'success');
+
+  var orderRef = vmlNewOrderRef('VML-REG');
+  var { error } = await vmlClient.rpc('vml_register_player', {
+    p_name: regName, p_mobile: regMobile, p_email: regEmail, p_razorpay_order_ref: orderRef
+  });
+
+  if (error) {
+    document.getElementById('pay-btn').disabled = false;
+    showMsg('payment-msg', error.message, 'error');
+    return;
+  }
+
+  vmlOpenRazorpay({
+    amountInr: REGISTRATION_FEE_INR,
+    name: regName, email: regEmail, mobile: regMobile,
+    description: 'Vadodara Mahjong League — Annual Membership',
+    orderRef: orderRef,
+    onSuccess: function () {
+      document.getElementById('payment-card').style.display = 'none';
+      document.getElementById('pending-card').style.display = 'block';
+      showMsg('payment-msg', '', '');
+      vmlPollProfile(
+        function (p) { return p.status === 'pending_approval'; },
+        function () { /* already shows pending-card */ },
+        function () { /* still fine — webhook may just be slow; email will confirm once admin approves */ }
+      );
+    },
+    onDismiss: function () {
+      document.getElementById('pay-btn').disabled = false;
+    }
+  });
+}
+</script>
+</body>
+</html>

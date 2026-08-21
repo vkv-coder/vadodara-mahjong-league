@@ -1,0 +1,14 @@
+{
+  "name": "Vadodara Mahjong League",
+  "short_name": "VML",
+  "description": "Vadodara's Mahjong leaderboard and league membership",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#EAF4EA",
+  "theme_color": "#EAF4EA",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

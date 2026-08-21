@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vadodara Mahjong League</title>
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#EAF4EA" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EAF4EA;--surface:#F5FAF6;--card:#FFFFFF;--border:#D7E8DA;--gold:#2E9E60;--gold-light:#3FBE79;--text:#1B4D2E;--muted:#5B6B5B;--radius:12px;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 20px;text-align:center;}
+.header-title{font-family:'Noto Serif Display',serif;font-size:20px;color:var(--gold);}
+.header-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.hero{max-width:480px;margin:0 auto;padding:32px 20px;text-align:center;}
+.hero-emoji{font-size:48px;margin-bottom:12px;}
+.hero h1{font-family:'Noto Serif Display',serif;font-size:22px;margin-bottom:10px;}
+.hero p{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:24px;}
+.actions{display:flex;flex-direction:column;gap:12px;}
+.btn{display:block;padding:14px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;text-align:center;border:none;cursor:pointer;font-family:'Inter',sans-serif;}
+.btn-primary{background:var(--gold);color:#fff;}
+.btn-secondary{background:var(--card);color:var(--text);border:1px solid var(--border);}
+.how-it-works{max-width:480px;margin:24px auto;padding:0 20px;}
+.how-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}
+.how-card h3{font-size:14px;margin-bottom:10px;}
+.how-card ol{padding-left:18px;font-size:13px;color:var(--muted);line-height:1.8;}
+.footer{text-align:center;padding:24px 20px;font-size:12px;color:var(--muted);}
+.footer a{color:var(--gold);}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">🀄 Vadodara Mahjong League</div>
+  <div class="header-sub">Members · Matches · Leaderboard</div>
+</div>
+
+<div class="hero">
+  <div class="hero-emoji">🏆</div>
+  <h1>Vadodara's home for competitive Mahjong</h1>
+  <p>Register as a league member, log your match scores, and climb the city-wide leaderboard — Traditional and Taiwanese rules, tracked all year round.</p>
+  <div class="actions">
+    <a class="btn btn-primary" href="/leaderboard.html">View Leaderboard</a>
+    <a class="btn btn-secondary" href="/register.html">Register as a Member</a>
+    <a class="btn btn-secondary" href="/login.html">Member Login</a>
+  </div>
+</div>
+
+<div class="how-it-works">
+  <div class="how-card">
+    <h3>How it works</h3>
+    <ol>
+      <li>Register and pay the annual membership fee.</li>
+      <li>Once approved, you get your own member ID (e.g. VML0001).</li>
+      <li>After any 4-player game, one player logs everyone's score.</li>
+      <li>The other 3 players log in and confirm the result.</li>
+      <li>Once all 3 confirm, the leaderboard updates automatically.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="footer">
+  Anyone can view the leaderboard. Only approved members can log or confirm matches.<br/>
+  Questions? <a href="mailto:support@vadodaramahjongleague.com">support@vadodaramahjongleague.com</a>
+</div>
+
+</body>
+</html>

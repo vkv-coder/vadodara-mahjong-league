@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Vadodara Mahjong League</title>
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#EAF4EA" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EAF4EA;--surface:#F5FAF6;--card:#FFFFFF;--border:#D7E8DA;--gold:#2E9E60;--text:#1B4D2E;--muted:#5B6B5B;--radius:12px;--red:#c0392b;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+.header-title{font-family:'Noto Serif Display',serif;font-size:18px;color:var(--gold);}
+.header a{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:6px;font-size:11px;text-decoration:none;}
+.main{max-width:420px;margin:0 auto;padding:24px 16px 80px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;}
+input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:11px 14px;border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;outline:none;margin-bottom:14px;}
+.btn{display:block;width:100%;padding:14px;border-radius:10px;font-weight:600;font-size:15px;text-align:center;border:none;cursor:pointer;font-family:'Inter',sans-serif;background:var(--gold);color:#fff;}
+.msg{font-size:13px;margin-top:10px;padding:10px;border-radius:8px;}
+.msg.error{background:#FBEAEA;color:var(--red);}
+.msg.success{background:#E3F5E8;color:#1E7A46;}
+.links{text-align:center;margin-top:16px;font-size:13px;}
+.links a{color:var(--gold);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">🀄 Member Login</div>
+  <a href="/index.html">← Home</a>
+</div>
+
+<div class="main">
+  <div class="card">
+    <label>Email</label>
+    <input type="email" id="l-email" placeholder="you@example.com">
+    <label>Password</label>
+    <input type="password" id="l-password" placeholder="Your password">
+    <button class="btn" id="login-btn" onclick="doLogin()">Log In</button>
+    <div id="login-msg"></div>
+  </div>
+  <div class="links">Not registered yet? <a href="/register.html">Register here</a></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/vml-common.js"></script>
+<script>
+function showMsg(text, type) {
+  document.getElementById('login-msg').innerHTML = '<div class="msg ' + type + '">' + text + '</div>';
+}
+
+async function doLogin() {
+  var email = document.getElementById('l-email').value.trim();
+  var password = document.getElementById('l-password').value;
+  if (!email || !password) { showMsg('Enter your email and password.', 'error'); return; }
+
+  document.getElementById('login-btn').disabled = true;
+  var { error } = await vmlClient.auth.signInWithPassword({ email: email, password: password });
+  document.getElementById('login-btn').disabled = false;
+
+  if (error) { showMsg(error.message, 'error'); return; }
+
+  var { data } = await vmlClient.rpc('vml_my_profile');
+  var profile = data && data[0];
+
+  if (!profile || profile.status === 'pending_payment') {
+    window.location.href = '/register.html';
+  } else if (profile.status === 'pending_approval' || profile.status === 'rejected') {
+    window.location.href = '/register.html';
+  } else if (profile.is_admin) {
+    window.location.href = '/admin.html';
+  } else {
+    window.location.href = '/dashboard.html';
+  }
+}
+</script>
+</body>
+</html>

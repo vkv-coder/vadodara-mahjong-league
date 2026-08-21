@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Vadodara Mahjong League</title>
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#EAF4EA" />
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EAF4EA;--surface:#F5FAF6;--card:#FFFFFF;--border:#D7E8DA;--gold:#2E9E60;--text:#1B4D2E;--muted:#5B6B5B;--radius:12px;--red:#c0392b;--amber:#B9770E;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+.header-title{font-family:'Noto Serif Display',serif;font-size:18px;color:var(--gold);}
+.header-actions{display:flex;gap:8px;}
+.header a,.header button{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:6px;font-size:11px;text-decoration:none;cursor:pointer;font-family:'Inter',sans-serif;}
+.main{max-width:480px;margin:0 auto;padding:20px 16px 80px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px;}
+.card h2{font-size:14px;margin-bottom:12px;}
+.profile-row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;}
+.profile-row .k{color:var(--muted);}
+.profile-row .v{font-weight:600;}
+.expiry-warning{background:#FDF3E7;color:var(--amber);font-size:12px;padding:10px;border-radius:8px;margin-top:10px;}
+.expiry-expired{background:#FBEAEA;color:var(--red);font-size:12px;padding:10px;border-radius:8px;margin-top:10px;}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;}
+input,select{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;outline:none;margin-bottom:12px;}
+.player-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;}
+.player-name-hint{font-size:11px;color:var(--muted);margin:-8px 0 10px 2px;min-height:14px;}
+.player-name-hint.ok{color:#1E7A46;}
+.player-name-hint.err{color:var(--red);}
+.btn{display:block;width:100%;padding:13px;border-radius:10px;font-weight:600;font-size:14px;text-align:center;border:none;cursor:pointer;font-family:'Inter',sans-serif;}
+.btn-primary{background:var(--gold);color:#fff;}
+.btn-outline{background:transparent;border:1px solid var(--gold);color:var(--gold);}
+.btn:disabled{opacity:0.6;cursor:not-allowed;}
+.msg{font-size:13px;margin-top:10px;padding:10px;border-radius:8px;}
+.msg.error{background:#FBEAEA;color:var(--red);}
+.msg.success{background:#E3F5E8;color:#1E7A46;}
+.pending-item{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;}
+.pending-item .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;}
+.pending-item .top .cat{font-weight:600;}
+.pending-item .top .date{color:var(--muted);}
+.detail-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--surface);}
+.detail-row.me{font-weight:700;}
+.detail-actions{display:flex;gap:8px;margin-top:12px;}
+.detail-actions .btn{flex:1;padding:10px;font-size:13px;}
+.btn-confirm{background:var(--gold);color:#fff;}
+.btn-dispute{background:transparent;border:1px solid var(--red);color:var(--red);}
+.empty-note{font-size:13px;color:var(--muted);text-align:center;padding:14px 0;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">🀄 My Dashboard</div>
+  <div class="header-actions">
+    <a href="/leaderboard.html">Leaderboard</a>
+    <a href="#" id="admin-link" style="display:none;" onclick="window.location.href='/admin.html'">Admin</a>
+    <button onclick="doLogout()">Log out</button>
+  </div>
+</div>
+
+<div class="main" id="main" style="display:none;">
+
+  <div class="card">
+    <h2>My Membership</h2>
+    <div class="profile-row"><span class="k">Name</span><span class="v" id="p-name">-</span></div>
+    <div class="profile-row"><span class="k">Member ID</span><span class="v" id="p-member-id">-</span></div>
+    <div class="profile-row"><span class="k">Valid Until</span><span class="v" id="p-expires">-</span></div>
+    <div id="expiry-note"></div>
+    <div id="renew-section" style="display:none;margin-top:12px;">
+      <button class="btn btn-outline" id="renew-btn" onclick="startRenewal()">Renew Membership (₹<span id="renew-fee"></span>)</button>
+      <div id="renew-msg"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Matches Awaiting Your Confirmation</h2>
+    <div id="pending-list"><div class="empty-note">Loading...</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Log a Match</h2>
+    <label>Category</label>
+    <select id="m-category">
+      <option value="traditional">🀄 Traditional (scores sum to 140000)</option>
+      <option value="taiwanese">🏆 Taiwanese (scores sum to 2040)</option>
+    </select>
+    <label>Match Date</label>
+    <input type="date" id="m-date">
+
+    <div id="players-form"></div>
+
+    <button class="btn btn-primary" id="log-match-btn" onclick="submitMatch()">Submit Match for Confirmation</button>
+    <div id="match-msg"></div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/vml-common.js"></script>
+<script>
+var myProfile = null;
+
+window.addEventListener('DOMContentLoaded', async function () {
+  var { data: { session } } = await vmlClient.auth.getSession();
+  if (!session) { window.location.href = '/login.html'; return; }
+
+  var { data } = await vmlClient.rpc('vml_my_profile');
+  myProfile = data && data[0];
+
+  if (!myProfile || myProfile.status !== 'active') {
+    window.location.href = '/register.html';
+    return;
+  }
+
+  document.getElementById('main').style.display = 'block';
+  if (myProfile.is_admin) document.getElementById('admin-link').style.display = 'inline-block';
+
+  renderProfile();
+  buildPlayersForm();
+  document.getElementById('m-date').max = new Date().toISOString().slice(0, 10);
+  document.getElementById('m-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('renew-fee').textContent = RENEWAL_FEE_INR;
+
+  loadPendingConfirmations();
+});
+
+function renderProfile() {
+  document.getElementById('p-name').textContent = myProfile.name;
+  document.getElementById('p-member-id').textContent = myProfile.member_id;
+  var expires = new Date(myProfile.expires_at);
+  document.getElementById('p-expires').textContent = expires.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+
+  var daysLeft = Math.floor((expires - new Date()) / (1000 * 60 * 60 * 24));
+  var noteEl = document.getElementById('expiry-note');
+  if (daysLeft < 0) {
+    noteEl.innerHTML = '<div class="expiry-expired">Your membership has lapsed — you\'re hidden from the leaderboard and can\'t log or confirm matches until you renew.</div>';
+    document.getElementById('renew-section').style.display = 'block';
+  } else if (daysLeft <= 30) {
+    noteEl.innerHTML = '<div class="expiry-warning">Your membership expires in ' + daysLeft + ' day(s) — renew soon to stay on the leaderboard.</div>';
+    document.getElementById('renew-section').style.display = 'block';
+  }
+}
+
+function buildPlayersForm() {
+  var html = '';
+  html += '<div class="player-row"><input type="text" value="' + myProfile.member_id + ' (you)" disabled></div>';
+  html += '<div class="player-row"><input type="number" id="score-me" placeholder="Your score"></div>';
+  for (var i = 1; i <= 3; i++) {
+    html += '<div class="player-row">'
+      + '<input type="text" id="player-' + i + '-id" placeholder="Member ID (e.g. VML0002)" onblur="lookupPlayer(' + i + ')">'
+      + '<input type="number" id="player-' + i + '-score" placeholder="Score">'
+      + '</div>'
+      + '<div class="player-name-hint" id="player-' + i + '-hint"></div>';
+  }
+  document.getElementById('players-form').innerHTML = html;
+}
+
+var lookedUpIds = {};
+
+async function lookupPlayer(i) {
+  var idInput = document.getElementById('player-' + i + '-id');
+  var hintEl = document.getElementById('player-' + i + '-hint');
+  var memberId = idInput.value.trim().toUpperCase();
+  idInput.value = memberId;
+  lookedUpIds[i] = null;
+
+  if (!memberId) { hintEl.textContent = ''; hintEl.className = 'player-name-hint'; return; }
+  if (memberId === myProfile.member_id) {
+    hintEl.textContent = "That's your own ID — enter your teammates' IDs here instead.";
+    hintEl.className = 'player-name-hint err';
+    return;
+  }
+
+  var { data } = await vmlClient.rpc('vml_lookup_member', { p_member_id: memberId });
+  var found = data && data[0];
+  if (found) {
+    lookedUpIds[i] = found;
+    hintEl.textContent = '✓ ' + found.name;
+    hintEl.className = 'player-name-hint ok';
+  } else {
+    hintEl.textContent = 'No active member found with that ID.';
+    hintEl.className = 'player-name-hint err';
+  }
+}
+
+function showMatchMsg(text, type) {
+  document.getElementById('match-msg').innerHTML = text ? ('<div class="msg ' + type + '">' + text + '</div>') : '';
+}
+
+async function submitMatch() {
+  var category = document.getElementById('m-category').value;
+  var matchDate = document.getElementById('m-date').value;
+  var poolTotal = category === 'traditional' ? 140000 : 2040;
+
+  var scoreMe = parseInt(document.getElementById('score-me').value, 10);
+  var playerIds = [myProfile.id];
+  var scores = [scoreMe];
+
+  for (var i = 1; i <= 3; i++) {
+    var found = lookedUpIds[i];
+    var score = parseInt(document.getElementById('player-' + i + '-score').value, 10);
+    if (!found) { showMatchMsg('Look up a valid member ID for every player first.', 'error'); return; }
+    if (isNaN(score)) { showMatchMsg('Enter a score for every player.', 'error'); return; }
+    playerIds.push(found.id);
+    scores.push(score);
+  }
+
+  if (isNaN(scoreMe)) { showMatchMsg('Enter your own score.', 'error'); return; }
+
+  var sum = scores.reduce(function (a, b) { return a + b; }, 0);
+  if (sum !== poolTotal) {
+    showMatchMsg('The 4 scores must add up to ' + poolTotal + ' for ' + category + ' matches (currently ' + sum + ').', 'error');
+    return;
+  }
+
+  document.getElementById('log-match-btn').disabled = true;
+  var { error } = await vmlClient.rpc('vml_create_match', {
+    p_player_ids: playerIds, p_scores: scores, p_category: category, p_match_date: matchDate
+  });
+  document.getElementById('log-match-btn').disabled = false;
+
+  if (error) { showMatchMsg(error.message, 'error'); return; }
+
+  showMatchMsg('✅ Match logged! Waiting for the other 3 players to confirm.', 'success');
+  document.getElementById('score-me').value = '';
+  for (var j = 1; j <= 3; j++) {
+    document.getElementById('player-' + j + '-id').value = '';
+    document.getElementById('player-' + j + '-score').value = '';
+    document.getElementById('player-' + j + '-hint').textContent = '';
+  }
+  lookedUpIds = {};
+}
+
+async function loadPendingConfirmations() {
+  var { data } = await vmlClient.rpc('vml_my_pending_confirmations');
+  var rows = data || [];
+  var listEl = document.getElementById('pending-list');
+
+  if (!rows.length) {
+    listEl.innerHTML = '<div class="empty-note">Nothing waiting on you right now.</div>';
+    return;
+  }
+
+  listEl.innerHTML = rows.map(function (r) {
+    return '<div class="pending-item" id="pending-' + r.match_id + '">'
+      + '<div class="top"><span class="cat">' + (r.category === 'traditional' ? '🀄 Traditional' : '🏆 Taiwanese') + '</span><span class="date">' + r.match_date + '</span></div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Logged by ' + r.creator_name + '</div>'
+      + '<div class="detail-rows" id="detail-' + r.match_id + '"></div>'
+      + '<div class="detail-actions">'
+      + '<button class="btn btn-confirm" onclick="doConfirm(\'' + r.match_id + '\')">✅ Confirm</button>'
+      + '<button class="btn btn-dispute" onclick="doDispute(\'' + r.match_id + '\')">Dispute</button>'
+      + '</div></div>';
+  }).join('');
+
+  rows.forEach(function (r) { loadMatchDetail(r.match_id); });
+}
+
+async function loadMatchDetail(matchId) {
+  var { data } = await vmlClient.rpc('vml_match_detail', { p_match_id: matchId });
+  var rows = data || [];
+  var el = document.getElementById('detail-' + matchId);
+  if (!el) return;
+  el.innerHTML = rows.map(function (p) {
+    var isMe = p.player_id === myProfile.id;
+    return '<div class="detail-row' + (isMe ? ' me' : '') + '"><span>' + p.name + ' (' + p.member_id + ')' + (isMe ? ' — you' : '') + '</span><span>' + p.score + ' pts (' + p.rank_points + (p.confirmed ? ' ✓' : '') + ')</span></div>';
+  }).join('');
+}
+
+async function doConfirm(matchId) {
+  var { error } = await vmlClient.rpc('vml_confirm_match', { p_match_id: matchId });
+  if (error) { alert(error.message); return; }
+  loadPendingConfirmations();
+}
+
+async function doDispute(matchId) {
+  var reason = prompt('Optional: why are you disputing this match?') || null;
+  var { error } = await vmlClient.rpc('vml_reject_match', { p_match_id: matchId, p_reason: reason });
+  if (error) { alert(error.message); return; }
+  loadPendingConfirmations();
+}
+
+async function startRenewal() {
+  document.getElementById('renew-btn').disabled = true;
+  var orderRef = vmlNewOrderRef('VML-RENEW');
+  var { error } = await vmlClient.rpc('vml_start_renewal', { p_razorpay_order_ref: orderRef });
+  if (error) {
+    document.getElementById('renew-btn').disabled = false;
+    document.getElementById('renew-msg').innerHTML = '<div class="msg error">' + error.message + '</div>';
+    return;
+  }
+
+  vmlOpenRazorpay({
+    amountInr: RENEWAL_FEE_INR,
+    name: myProfile.name, email: myProfile.email, mobile: myProfile.mobile,
+    description: 'Vadodara Mahjong League — Membership Renewal',
+    orderRef: orderRef,
+    onSuccess: function () {
+      document.getElementById('renew-msg').innerHTML = '<div class="msg success">Payment received! Confirming renewal...</div>';
+      vmlPollProfile(
+        function (p) { return new Date(p.expires_at) > new Date(myProfile.expires_at); },
+        function (p) { myProfile = p; renderProfile(); document.getElementById('renew-msg').innerHTML = '<div class="msg success">✅ Membership renewed until ' + new Date(p.expires_at).toLocaleDateString('en-IN') + '.</div>'; },
+        function () { document.getElementById('renew-msg').innerHTML = '<div class="msg success">Payment received — confirmation may take a minute, refresh shortly.</div>'; }
+      );
+    },
+    onDismiss: function () { document.getElementById('renew-btn').disabled = false; }
+  });
+}
+
+async function doLogout() {
+  await vmlClient.auth.signOut();
+  window.location.href = '/index.html';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Vadodara Mahjong League</title>
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#EAF4EA" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EAF4EA;--surface:#F5FAF6;--card:#FFFFFF;--border:#D7E8DA;--gold:#2E9E60;--text:#1B4D2E;--muted:#5B6B5B;--radius:12px;--red:#c0392b;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+.header-title{font-family:'Noto Serif Display',serif;font-size:18px;color:var(--gold);}
+.header a,.header button{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:6px;font-size:11px;text-decoration:none;cursor:pointer;font-family:'Inter',sans-serif;}
+.main{max-width:640px;margin:0 auto;padding:20px 16px 80px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px;}
+.card h2{font-size:14px;margin-bottom:12px;}
+.reg-item{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.reg-info{font-size:13px;}
+.reg-info .name{font-weight:600;}
+.reg-info .meta{color:var(--muted);font-size:11px;}
+.reg-actions{display:flex;gap:6px;flex-shrink:0;}
+.btn-sm{padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;border:none;cursor:pointer;font-family:'Inter',sans-serif;}
+.btn-approve{background:var(--gold);color:#fff;}
+.btn-reject{background:transparent;border:1px solid var(--red);color:var(--red);}
+.empty-note{font-size:13px;color:var(--muted);text-align:center;padding:14px 0;}
+input[type=text]{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;outline:none;margin-bottom:12px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{text-align:left;color:var(--muted);font-weight:600;padding:6px 4px;border-bottom:1px solid var(--border);}
+td{padding:6px 4px;border-bottom:1px solid var(--surface);}
+.status-active{color:#1E7A46;font-weight:600;}
+.status-expired{color:var(--red);font-weight:600;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">🀄 Admin</div>
+  <div style="display:flex;gap:8px;">
+    <a href="/dashboard.html">Dashboard</a>
+    <button onclick="doLogout()">Log out</button>
+  </div>
+</div>
+
+<div class="main" id="main" style="display:none;">
+
+  <div class="card">
+    <h2>Pending Registrations</h2>
+    <div id="pending-list"><div class="empty-note">Loading...</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Disputed Matches</h2>
+    <div id="disputed-list"><div class="empty-note">Loading...</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Members</h2>
+    <input type="text" id="member-search" placeholder="Search by name, member ID, or mobile" oninput="debouncedSearch()">
+    <table>
+      <thead><tr><th>Member ID</th><th>Name</th><th>Mobile</th><th>Status</th></tr></thead>
+      <tbody id="member-rows"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<div id="denied" style="display:none;padding:40px 20px;text-align:center;color:var(--muted);">Admin access required.</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/vml-common.js"></script>
+<script>
+window.addEventListener('DOMContentLoaded', async function () {
+  var { data: { session } } = await vmlClient.auth.getSession();
+  if (!session) { window.location.href = '/login.html'; return; }
+
+  var { data } = await vmlClient.rpc('vml_my_profile');
+  var profile = data && data[0];
+  if (!profile || !profile.is_admin) {
+    document.getElementById('denied').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('main').style.display = 'block';
+  loadPending();
+  loadDisputed();
+  loadMembers();
+});
+
+async function loadPending() {
+  var { data } = await vmlClient.rpc('vml_admin_pending_registrations');
+  var rows = data || [];
+  var el = document.getElementById('pending-list');
+  if (!rows.length) { el.innerHTML = '<div class="empty-note">No pending registrations.</div>'; return; }
+  el.innerHTML = rows.map(function (r) {
+    return '<div class="reg-item">'
+      + '<div class="reg-info"><div class="name">' + r.name + '</div><div class="meta">' + r.email + ' · ' + r.mobile + '</div></div>'
+      + '<div class="reg-actions">'
+      + '<button class="btn-sm btn-approve" onclick="approvePlayer(\'' + r.id + '\')">Approve</button>'
+      + '<button class="btn-sm btn-reject" onclick="rejectPlayer(\'' + r.id + '\')">Reject</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+async function approvePlayer(id) {
+  var { data, error } = await vmlClient.rpc('vml_approve_player', { p_player_id: id });
+  if (error) { alert(error.message); return; }
+  alert('Approved! Member ID: ' + data);
+  loadPending(); loadMembers();
+}
+
+async function rejectPlayer(id) {
+  if (!confirm('Reject this registration?')) return;
+  var { error } = await vmlClient.rpc('vml_reject_player', { p_player_id: id });
+  if (error) { alert(error.message); return; }
+  loadPending(); loadMembers();
+}
+
+async function loadDisputed() {
+  var { data } = await vmlClient.rpc('vml_admin_rejected_matches');
+  var rows = data || [];
+  var el = document.getElementById('disputed-list');
+  if (!rows.length) { el.innerHTML = '<div class="empty-note">No disputed matches.</div>'; return; }
+  el.innerHTML = rows.map(function (r) {
+    return '<div class="reg-item">'
+      + '<div class="reg-info"><div class="name">' + (r.category === 'traditional' ? '🀄 Traditional' : '🏆 Taiwanese') + ' — ' + r.match_date + '</div>'
+      + '<div class="meta">Logged by ' + r.creator_name + (r.rejected_reason ? (' · "' + r.rejected_reason + '"') : '') + '</div></div>'
+      + '</div>';
+  }).join('');
+}
+
+var searchTimer = null;
+function debouncedSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadMembers, 300);
+}
+
+async function loadMembers() {
+  var q = document.getElementById('member-search').value.trim() || null;
+  var { data } = await vmlClient.rpc('vml_admin_member_list', { p_search: q });
+  var rows = data || [];
+  var now = new Date();
+  document.getElementById('member-rows').innerHTML = rows.map(function (r) {
+    var expired = r.expires_at && new Date(r.expires_at) < now;
+    var statusLabel = r.status === 'active' ? (expired ? 'Lapsed' : 'Active') : r.status;
+    var statusClass = r.status === 'active' && !expired ? 'status-active' : (expired ? 'status-expired' : '');
+    return '<tr><td>' + (r.member_id || '-') + '</td><td>' + r.name + '</td><td>' + r.mobile + '</td><td class="' + statusClass + '">' + statusLabel + '</td></tr>';
+  }).join('');
+}
+
+async function doLogout() {
+  await vmlClient.auth.signOut();
+  window.location.href = '/index.html';
+}
+</script>
+</body>
+</html>
