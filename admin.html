@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Vadodara Mahjong League</title>
-<link rel="manifest" href="/manifest.json" />
+<link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#EAF4EA" />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -39,7 +39,7 @@ td{padding:6px 4px;border-bottom:1px solid var(--surface);}
 <div class="header">
   <div class="header-title">🀄 Admin</div>
   <div style="display:flex;gap:8px;">
-    <a href="/dashboard.html">Dashboard</a>
+    <a href="dashboard.html">Dashboard</a>
     <button onclick="doLogout()">Log out</button>
   </div>
 </div>
@@ -70,11 +70,11 @@ td{padding:6px 4px;border-bottom:1px solid var(--surface);}
 <div id="denied" style="display:none;padding:40px 20px;text-align:center;color:var(--muted);">Admin access required.</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/js/vml-common.js"></script>
+<script src="js/vml-common.js"></script>
 <script>
 window.addEventListener('DOMContentLoaded', async function () {
   var { data: { session } } = await vmlClient.auth.getSession();
-  if (!session) { window.location.href = '/login.html'; return; }
+  if (!session) { window.location.href='login.html'; return; }
 
   var { data } = await vmlClient.rpc('vml_my_profile');
   var profile = data && data[0];
@@ -152,7 +152,7 @@ async function loadMembers() {
 
 async function doLogout() {
   await vmlClient.auth.signOut();
-  window.location.href = '/index.html';
+  window.location.href='index.html';
 }
 </script>
 </body>

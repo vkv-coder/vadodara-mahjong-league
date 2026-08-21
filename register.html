@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Register — Vadodara Mahjong League</title>
-<link rel="manifest" href="/manifest.json" />
+<link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#EAF4EA" />
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -33,7 +33,7 @@ input:focus{border-color:var(--gold);}
 
 <div class="header">
   <div class="header-title">🀄 Register</div>
-  <a href="/index.html">← Home</a>
+  <a href="index.html">← Home</a>
 </div>
 
 <div class="main">
@@ -72,7 +72,7 @@ input:focus{border-color:var(--gold);}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/js/vml-common.js"></script>
+<script src="js/vml-common.js"></script>
 <script>
 var regName = '', regMobile = '', regEmail = '';
 
@@ -107,7 +107,7 @@ function showStatusCard(status) {
     textEl.textContent = "You're already registered and your payment is confirmed. An admin still needs to approve your membership — you'll get an email once that happens.";
   } else if (status === 'active') {
     titleEl.textContent = '✅ Already a member';
-    textEl.innerHTML = 'You\'re already an approved member. <a href="/dashboard.html">Go to your dashboard →</a>';
+    textEl.innerHTML = 'You\'re already an approved member. <a href="dashboard.html">Go to your dashboard →</a>';
   } else if (status === 'rejected') {
     titleEl.textContent = 'Registration not approved';
     textEl.innerHTML = 'Contact <a href="mailto:support@vadodaramahjongleague.com">support</a> if you think this is a mistake.';

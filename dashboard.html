@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard — Vadodara Mahjong League</title>
-<link rel="manifest" href="/manifest.json" />
+<link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#EAF4EA" />
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -55,8 +55,8 @@ input,select{width:100%;background:var(--surface);border:1px solid var(--border)
 <div class="header">
   <div class="header-title">🀄 My Dashboard</div>
   <div class="header-actions">
-    <a href="/leaderboard.html">Leaderboard</a>
-    <a href="#" id="admin-link" style="display:none;" onclick="window.location.href='/admin.html'">Admin</a>
+    <a href="leaderboard.html">Leaderboard</a>
+    <a href="#" id="admin-link" style="display:none;" onclick="window.location.href='admin.html'">Admin</a>
     <button onclick="doLogout()">Log out</button>
   </div>
 </div>
@@ -99,19 +99,19 @@ input,select{width:100%;background:var(--surface);border:1px solid var(--border)
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/js/vml-common.js"></script>
+<script src="js/vml-common.js"></script>
 <script>
 var myProfile = null;
 
 window.addEventListener('DOMContentLoaded', async function () {
   var { data: { session } } = await vmlClient.auth.getSession();
-  if (!session) { window.location.href = '/login.html'; return; }
+  if (!session) { window.location.href='login.html'; return; }
 
   var { data } = await vmlClient.rpc('vml_my_profile');
   myProfile = data && data[0];
 
   if (!myProfile || myProfile.status !== 'active') {
-    window.location.href = '/register.html';
+    window.location.href='register.html';
     return;
   }
 
@@ -311,7 +311,7 @@ async function startRenewal() {
 
 async function doLogout() {
   await vmlClient.auth.signOut();
-  window.location.href = '/index.html';
+  window.location.href='index.html';
 }
 </script>
 </body>
