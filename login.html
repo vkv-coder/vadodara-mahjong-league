@@ -52,6 +52,14 @@ function showMsg(text, type) {
   document.getElementById('login-msg').innerHTML = '<div class="msg ' + type + '">' + text + '</div>';
 }
 
+window.addEventListener('DOMContentLoaded', function () {
+  var prefillEmail = new URLSearchParams(window.location.search).get('email');
+  if (prefillEmail) {
+    document.getElementById('l-email').value = prefillEmail;
+    document.getElementById('l-password').focus();
+  }
+});
+
 async function doLogin() {
   var email = document.getElementById('l-email').value.trim();
   var password = document.getElementById('l-password').value;

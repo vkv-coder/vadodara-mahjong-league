@@ -132,9 +132,32 @@ async function doSignup() {
   regName = name; regMobile = mobile; regEmail = email;
 
   var { data, error } = await vmlClient.auth.signUp({ email: email, password: password });
-  document.getElementById('signup-btn').disabled = false;
 
-  if (error) { showMsg('signup-msg', error.message, 'error'); return; }
+  if (error) {
+    // This Supabase project's auth.users is shared across every one of our
+    // apps, not just this one — an email already used to sign up on ANY
+    // other app on the same project will fail signUp here. Don't dead-end:
+    // try logging in with the same credentials first (covers reusing the
+    // same password), and if that fails too, send them to login.html
+    // instead of showing a bare error.
+    if (isAlreadyRegisteredError(error)) {
+      var signInRes = await vmlClient.auth.signInWithPassword({ email: email, password: password });
+      if (!signInRes.error) {
+        document.getElementById('signup-btn').disabled = false;
+        document.getElementById('signup-card').style.display = 'none';
+        document.getElementById('payment-card').style.display = 'block';
+        return;
+      }
+      showMsg('signup-msg', 'This email already has an account with us (possibly from one of our other apps) — redirecting you to log in with its existing password...', 'error');
+      setTimeout(function () { window.location.href = 'login.html?email=' + encodeURIComponent(email); }, 2500);
+      return;
+    }
+    document.getElementById('signup-btn').disabled = false;
+    showMsg('signup-msg', error.message, 'error');
+    return;
+  }
+
+  document.getElementById('signup-btn').disabled = false;
 
   if (!data.session) {
     showMsg('signup-msg', '✅ Account created. Check your email to confirm it, then come back and log in to continue to payment.', 'success');
@@ -143,6 +166,11 @@ async function doSignup() {
 
   document.getElementById('signup-card').style.display = 'none';
   document.getElementById('payment-card').style.display = 'block';
+}
+
+function isAlreadyRegisteredError(error) {
+  var msg = (error.message || '').toLowerCase();
+  return msg.indexOf('already registered') !== -1 || msg.indexOf('already exists') !== -1;
 }
 
 async function startPayment() {
