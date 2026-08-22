@@ -125,30 +125,47 @@ function handleSupabaseWebhook(body) {
 
 function handlePlayerStatusChange(record, oldRecord) {
   var adminEmail = PropertiesService.getScriptProperties().getProperty('ADMIN_EMAIL');
+  var welcomeEmail = function () {
+    safeEmail(record.email,
+      'Welcome to the Vadodara Mahjong League — your member ID is ' + record.member_id,
+      'Hi ' + record.name + ',\n\n' +
+      'Payment received and your membership is now active! Your member ID is ' + record.member_id + '.\n' +
+      'You\'ve also been credited a 1000-point welcome bonus.\n' +
+      'Share your member ID with teammates so they can add you when logging a match.\n\n' +
+      'Log in any time at https://vadodaramahjongleague.com/login.html\n' +
+      'Membership valid until: ' + record.expires_at
+    );
+  };
 
-  if (oldRecord.status === 'pending_payment' && record.status === 'pending_approval') {
+  if (oldRecord.status === 'pending_payment' && record.status === 'active') {
+    // Normal path: payment confirmed -> auto-activated immediately, no
+    // manual admin review step. Admin gets an FYI, not an approval request.
+    safeEmail(adminEmail,
+      'VML: New member auto-approved — ' + record.name + ' (' + record.member_id + ')',
+      'A new member paid and was automatically activated:\n\n' +
+      'Name: ' + record.name + '\nMobile: ' + record.mobile + '\nEmail: ' + record.email + '\n' +
+      'Member ID: ' + record.member_id + '\n\n' +
+      'View members anytime at: https://vadodaramahjongleague.com/admin.html'
+    );
+    welcomeEmail();
+  } else if (oldRecord.status === 'pending_payment' && record.status === 'pending_approval') {
+    // Manual-fallback path only (vml_approve_player still exists for edge
+    // cases) -- the automatic flow above skips this status entirely now.
     safeEmail(adminEmail,
       'VML: New registration awaiting approval — ' + record.name,
-      'A new member has paid and is awaiting approval:\n\n' +
+      'A new member has paid and is awaiting manual approval:\n\n' +
       'Name: ' + record.name + '\nMobile: ' + record.mobile + '\nEmail: ' + record.email + '\n\n' +
       'Approve or reject at: https://vadodaramahjongleague.com/admin.html'
     );
     safeEmail(record.email,
       'Vadodara Mahjong League — payment received',
       'Hi ' + record.name + ',\n\n' +
-      'We\'ve received your membership payment. Your registration is now awaiting admin approval — ' +
+      'We\'ve received your membership payment. Your registration is awaiting admin approval — ' +
       'you\'ll get another email with your member ID as soon as that\'s done.\n\n' +
       'Questions? info.anyapps@gmail.com'
     );
   } else if (oldRecord.status === 'pending_approval' && record.status === 'active') {
-    safeEmail(record.email,
-      'Welcome to the Vadodara Mahjong League — your member ID is ' + record.member_id,
-      'Hi ' + record.name + ',\n\n' +
-      'Your membership is approved! Your member ID is ' + record.member_id + '.\n' +
-      'Share it with teammates so they can add you when logging a match.\n\n' +
-      'Log in any time at https://vadodaramahjongleague.com/login.html\n' +
-      'Membership valid until: ' + record.expires_at
-    );
+    welcomeEmail();
   }
 }
 

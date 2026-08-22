@@ -149,10 +149,63 @@ $$;
 revoke all on function public.vml_start_renewal(text) from public;
 grant execute on function public.vml_start_renewal(text) to authenticated;
 
+-- Shared activation logic: assigns the per-letter sequential member_id,
+-- sets status=active + 1yr expiry + the one-time 1000-point welcome bonus.
+-- Not admin-gated itself (no auth.uid() check) -- deliberately NOT granted
+-- to anon/authenticated/service_role below, so it's only reachable via a
+-- nested call from another SECURITY DEFINER function (vml_handle_payment's
+-- automatic path, or vml_approve_player's admin-gated manual fallback),
+-- which run with this function owner's privileges regardless of grants
+-- (see postgres_rls_gotchas #6).
+create or replace function public.vml_activate_player(p_player_id uuid) returns text
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_name text;
+  v_letter char(1);
+  v_num integer;
+  v_member_id text;
+begin
+  select name into v_name from vml_players where id = p_player_id;
+  if v_name is null then
+    raise exception 'Player not found';
+  end if;
+
+  -- Member ID = first letter of the player's name + a 4-digit number that's
+  -- sequential *within that letter*, first-come-first-served (e.g. A0001,
+  -- A0002 for names starting with A; B0001 for the first B). Falls back to
+  -- the 'X' bucket for a name that doesn't start with a plain A-Z letter.
+  v_letter := upper(left(trim(v_name), 1));
+  if v_letter !~ '^[A-Z]$' then
+    v_letter := 'X';
+  end if;
+
+  insert into vml_member_id_counters (letter, next_num) values (v_letter, 1)
+  on conflict (letter) do update set next_num = vml_member_id_counters.next_num + 1
+  returning next_num into v_num;
+
+  v_member_id := v_letter || lpad(v_num::text, 4, '0');
+
+  update vml_players
+    set status = 'active',
+        member_id = v_member_id,
+        expires_at = now() + interval '1 year',
+        bonus_points = 1000
+    where id = p_player_id;
+
+  return v_member_id;
+end;
+$$;
+
+revoke all on function public.vml_activate_player(uuid) from public;
+
 -- Called ONLY by the Apps Script Razorpay-webhook relay (service_role key).
--- Handles both a fresh registration payment (pending_payment -> pending_approval)
--- and a renewal payment (active -> expires_at pushed forward 1 year), branching
--- on the player's current status so one webhook handler covers both cases.
+-- A fresh registration payment now activates the player IMMEDIATELY
+-- (auto-approval, no manual admin review step) -- a renewal payment
+-- (already active -> expires_at pushed forward 1 year) is the other branch,
+-- one webhook handler covers both cases.
 create or replace function public.vml_handle_payment(
   p_razorpay_order_ref text, p_razorpay_payment_id text
 ) returns void
@@ -172,9 +225,8 @@ begin
   end if;
 
   if v_status = 'pending_payment' then
-    update vml_players
-      set status = 'pending_approval', razorpay_payment_id = p_razorpay_payment_id
-      where id = v_id;
+    perform vml_activate_player(v_id);
+    update vml_players set razorpay_payment_id = p_razorpay_payment_id where id = v_id;
   elsif v_status = 'active' then
     update vml_players
       set expires_at = now() + interval '1 year', razorpay_payment_id = p_razorpay_payment_id
@@ -188,7 +240,9 @@ $$;
 revoke all on function public.vml_handle_payment(text,text) from public;
 grant execute on function public.vml_handle_payment(text,text) to service_role;
 
--- Admin-only: assigns the sequential member_id and activates the player.
+-- Admin-only manual fallback (e.g. a payment confirmed outside the normal
+-- Razorpay webhook path) -- the normal flow no longer relies on this since
+-- vml_handle_payment auto-activates, but it's kept for edge cases.
 create or replace function public.vml_approve_player(p_player_id uuid) returns text
 language plpgsql
 security definer
@@ -196,18 +250,14 @@ set search_path = public, extensions
 as $$
 declare
   v_is_admin boolean;
-  v_member_id text;
   v_status text;
-  v_name text;
-  v_letter char(1);
-  v_num integer;
 begin
-  select is_admin into v_is_admin from vml_players where id = auth.uid();
+  select vp.is_admin into v_is_admin from vml_players vp where vp.id = auth.uid();
   if not coalesce(v_is_admin, false) then
     raise exception 'Admin access required';
   end if;
 
-  select status, name into v_status, v_name from vml_players where id = p_player_id;
+  select status into v_status from vml_players where id = p_player_id;
   if v_status is null then
     raise exception 'Player not found';
   end if;
@@ -215,32 +265,7 @@ begin
     raise exception 'Player is not pending approval (status: %)', v_status;
   end if;
 
-  -- Member ID = first letter of the player's name + a 4-digit number that's
-  -- sequential *within that letter*, first-come-first-served (e.g. A0001,
-  -- A0002 for names starting with A; B0001 for the first B). Falls back to
-  -- the 'X' bucket for a name that doesn't start with a plain A-Z letter.
-  v_letter := upper(left(trim(v_name), 1));
-  if v_letter !~ '^[A-Z]$' then
-    v_letter := 'X';
-  end if;
-
-  insert into vml_member_id_counters (letter, next_num) values (v_letter, 1)
-  on conflict (letter) do update set next_num = vml_member_id_counters.next_num + 1
-  returning next_num into v_num;
-
-  v_member_id := v_letter || lpad(v_num::text, 4, '0');
-
-  -- One-time 1000-point welcome bonus, only ever granted here (first-time
-  -- approval) -- renewals (vml_handle_payment's 'active' branch) never
-  -- touch bonus_points again.
-  update vml_players
-    set status = 'active',
-        member_id = v_member_id,
-        expires_at = now() + interval '1 year',
-        bonus_points = 1000
-    where id = p_player_id;
-
-  return v_member_id;
+  return vml_activate_player(p_player_id);
 end;
 $$;
 
