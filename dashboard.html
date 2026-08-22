@@ -213,7 +213,8 @@ async function submitMatch() {
 
   var sum = scores.reduce(function (a, b) { return a + b; }, 0);
   if (sum !== poolTotal) {
-    showMatchMsg('The 4 scores must add up to ' + poolTotal + ' for ' + category + ' matches (currently ' + sum + ').', 'error');
+    alert('⚠️ Please check total.\n\nThe 4 scores must add up to ' + poolTotal + ' for ' + category + ' matches.\nCurrent total: ' + sum);
+    showMatchMsg('Scores must sum to ' + poolTotal + ' (currently ' + sum + ').', 'error');
     return;
   }
 
@@ -226,6 +227,7 @@ async function submitMatch() {
   if (error) { showMatchMsg(error.message, 'error'); return; }
 
   var matchCode = data && data[0] && data[0].match_code;
+  alert('✅ Match logged successfully!\n\nMatch code: ' + matchCode + '\n\nKeep this for your reference. Waiting for the other 3 players to confirm.');
   showMatchMsg('✅ Match logged! Reference code <strong>' + matchCode + '</strong> — keep it for your records. Waiting for the other 3 players to confirm.', 'success');
   document.getElementById('score-me').value = '';
   for (var j = 1; j <= 3; j++) {
