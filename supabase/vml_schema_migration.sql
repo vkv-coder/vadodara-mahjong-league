@@ -26,8 +26,12 @@ create table if not exists public.vml_players (
   expires_at          timestamptz,
   razorpay_payment_id text,
   razorpay_order_ref  text,
+  bonus_points        integer not null default 0,
   created_at          timestamptz not null default now()
 );
+
+-- Idempotent for a database that already ran an earlier version.
+alter table public.vml_players add column if not exists bonus_points integer not null default 0;
 
 create index if not exists vml_players_order_ref_idx on public.vml_players(razorpay_order_ref);
 
@@ -226,10 +230,14 @@ begin
 
   v_member_id := v_letter || lpad(v_num::text, 4, '0');
 
+  -- One-time 1000-point welcome bonus, only ever granted here (first-time
+  -- approval) -- renewals (vml_handle_payment's 'active' branch) never
+  -- touch bonus_points again.
   update vml_players
     set status = 'active',
         member_id = v_member_id,
-        expires_at = now() + interval '1 year'
+        expires_at = now() + interval '1 year',
+        bonus_points = 1000
     where id = p_player_id;
 
   return v_member_id;
@@ -456,6 +464,11 @@ grant execute on function public.vml_reject_match(uuid,text) to authenticated;
 -- (it determines the 140000/2040 pool-total validation), not when ranking.
 drop function if exists public.vml_public_leaderboard(text);
 
+-- Includes each player's one-time 1000-point welcome bonus (bonus_points,
+-- set once in vml_approve_player) added to their confirmed-match points --
+-- a brand new member with zero matches still shows up with 1000, not
+-- absent from the board entirely, hence the LEFT JOIN via the subquery
+-- rather than an inner join straight off vml_match_entries.
 create or replace function public.vml_public_leaderboard()
 returns table(member_id text, name text, points bigint, games bigint)
 language sql
@@ -464,13 +477,16 @@ set search_path = public, extensions
 stable
 as $$
   select p.member_id, p.name,
-         coalesce(sum(e.rank_points), 0)::bigint as points,
-         count(e.id)::bigint as games
+         (p.bonus_points + coalesce(mp.total_rank_points, 0))::bigint as points,
+         coalesce(mp.games, 0)::bigint as games
   from vml_players p
-  join vml_match_entries e on e.player_id = p.id
-  join vml_matches m on m.id = e.match_id and m.status = 'confirmed'
+  left join (
+    select e.player_id, sum(e.rank_points) as total_rank_points, count(*) as games
+    from vml_match_entries e
+    join vml_matches m on m.id = e.match_id and m.status = 'confirmed'
+    group by e.player_id
+  ) mp on mp.player_id = p.id
   where p.status = 'active' and p.expires_at > now()
-  group by p.member_id, p.name
   order by points desc;
 $$;
 

@@ -133,6 +133,13 @@ function handlePlayerStatusChange(record, oldRecord) {
       'Name: ' + record.name + '\nMobile: ' + record.mobile + '\nEmail: ' + record.email + '\n\n' +
       'Approve or reject at: https://vadodaramahjongleague.com/admin.html'
     );
+    safeEmail(record.email,
+      'Vadodara Mahjong League — payment received',
+      'Hi ' + record.name + ',\n\n' +
+      'We\'ve received your membership payment. Your registration is now awaiting admin approval — ' +
+      'you\'ll get another email with your member ID as soon as that\'s done.\n\n' +
+      'Questions? info.anyapps@gmail.com'
+    );
   } else if (oldRecord.status === 'pending_approval' && record.status === 'active') {
     safeEmail(record.email,
       'Welcome to the Vadodara Mahjong League — your member ID is ' + record.member_id,
