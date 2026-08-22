@@ -11,9 +11,8 @@ var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 // only ever lives in the Apps Script Script Properties for the webhook).
 var RAZORPAY_KEY_ID = 'rzp_test_XXXXXXXXXXXX';
 
-// TODO Vijay: set your real registration/renewal fee (in whole rupees).
-var REGISTRATION_FEE_INR = 500;
-var RENEWAL_FEE_INR = 500;
+var REGISTRATION_FEE_INR = 1000; // 1 year membership
+var RENEWAL_FEE_INR = 1000; // 1 year renewal
 
 var vmlClient = window.supabase.createClient(SB_URL, SB_KEY);
 
