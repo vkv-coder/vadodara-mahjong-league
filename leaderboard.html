@@ -11,20 +11,20 @@
 :root{--bg:#EAF4EA;--surface:#F5FAF6;--card:#FFFFFF;--border:#D7E8DA;--gold:#2E9E60;--gold-light:#3FBE79;--text:#1B4D2E;--muted:#5B6B5B;--radius:12px;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
-.header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;position:relative;}
-.header-title{font-family:'Noto Serif Display',serif;font-size:19px;font-weight:700;color:var(--gold);text-align:center;}
-.header a{position:absolute;left:20px;background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:6px;font-size:11px;text-decoration:none;}
-.main{max-width:480px;margin:0 auto;padding:20px 16px 80px;}
+.topbar{max-width:480px;margin:0 auto;padding:12px 16px 0;display:flex;justify-content:flex-end;}
+.topbar a{font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--border);padding:6px 10px;border-radius:6px;background:var(--card);}
+.brand{max-width:480px;margin:0 auto;padding:12px 20px 20px;text-align:center;}
+.brand-logo{width:90px;height:90px;object-fit:contain;margin:0 auto 8px;display:block;}
+.brand h1{font-family:'Noto Serif Display',serif;font-size:20px;font-weight:700;letter-spacing:0.5px;color:var(--text);}
+.brand .collab{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5;}
+.brand .collab strong{color:var(--gold);font-weight:700;}
+.main{max-width:480px;margin:0 auto;padding:0 16px 80px;}
 .loading{text-align:center;padding:32px;color:var(--muted);font-size:13px;}
 .spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 10px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .empty-state{text-align:center;padding:40px 20px;color:var(--muted);}
 .empty-state .empty-icon{font-size:40px;margin-bottom:12px;}
 .empty-state p{font-size:13px;line-height:1.6;}
-.stats-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:24px;}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;}
-.stat-number{font-size:22px;font-weight:700;color:var(--gold);}
-.stat-label{font-size:10px;color:var(--muted);margin-top:2px;}
 .podium{display:flex;align-items:flex-end;justify-content:center;gap:8px;margin-bottom:28px;padding:0 8px;}
 .podium-item{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;}
 .podium-crown{font-size:28px;margin-bottom:4px;}
@@ -51,19 +51,20 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 </head>
 <body>
 
-<div class="header">
+<div class="topbar">
   <a href="index.html">← Home</a>
-  <div class="header-title">🏆 Vadodara Mahjong League</div>
+</div>
+
+<div class="brand">
+  <img class="brand-logo" src="ttml-logo.png" alt="Tea & Tiles Mahjong Lounge logo">
+  <h1>VADODARA MAHJONG LEAGUE</h1>
+  <div class="collab">IN COLLABORATION WITH <strong>Tea &amp; Tiles Mahjong Lounge</strong></div>
 </div>
 
 <div class="main">
   <div id="lb-loading" class="loading"><div class="spinner"></div>Loading leaderboard...</div>
 
   <div id="lb-content" style="display:none;">
-    <div class="stats-row">
-      <div class="stat-card"><div class="stat-number" id="stat-players">-</div><div class="stat-label">Players</div></div>
-      <div class="stat-card"><div class="stat-number" id="stat-top">-</div><div class="stat-label">Top Points</div></div>
-    </div>
     <div id="podium-section"></div>
     <div class="section-label" id="rest-label" style="display:none;">Other Players</div>
     <div id="rest-section"></div>
@@ -95,9 +96,6 @@ async function loadLeaderboard() {
       document.getElementById('lb-empty').style.display = 'block';
       return;
     }
-
-    document.getElementById('stat-players').textContent = rows.length;
-    document.getElementById('stat-top').textContent = rows[0].points;
 
     var top3 = rows.slice(0, 3);
     var rest = rows.slice(3);

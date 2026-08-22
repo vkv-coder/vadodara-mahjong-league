@@ -31,10 +31,22 @@ create table if not exists public.vml_players (
 
 create index if not exists vml_players_order_ref_idx on public.vml_players(razorpay_order_ref);
 
+-- Superseded by vml_member_id_counters below (per-first-letter-of-name IDs,
+-- e.g. A0001/B0001, instead of one global VML0001/0002 counter) — left in
+-- place only because early test members (VML0001-VML0005) already used it;
+-- no longer consumed by vml_approve_player.
 create sequence if not exists public.vml_member_seq start 1;
+
+-- One row per letter (A-Z, plus a fallback 'X' bucket for a name that
+-- doesn't start with a letter), atomically incremented in vml_approve_player.
+create table if not exists public.vml_member_id_counters (
+  letter    char(1) primary key,
+  next_num  integer not null default 1
+);
 
 create table if not exists public.vml_matches (
   id               uuid primary key default extensions.gen_random_uuid(),
+  match_code       text,
   created_by       uuid not null references public.vml_players(id),
   category         text not null check (category in ('traditional','taiwanese')),
   match_date       date not null default current_date,
@@ -43,6 +55,12 @@ create table if not exists public.vml_matches (
   rejected_reason  text,
   created_at       timestamptz not null default now()
 );
+
+-- Idempotent for a database that already ran an earlier version of this
+-- migration (ALTER/CREATE INDEX, not CREATE TABLE, so re-running is safe).
+alter table public.vml_matches add column if not exists match_code text;
+create unique index if not exists vml_matches_match_code_idx
+  on public.vml_matches(match_code) where match_code is not null;
 
 create table if not exists public.vml_match_entries (
   id           uuid primary key default extensions.gen_random_uuid(),
@@ -176,13 +194,16 @@ declare
   v_is_admin boolean;
   v_member_id text;
   v_status text;
+  v_name text;
+  v_letter char(1);
+  v_num integer;
 begin
   select is_admin into v_is_admin from vml_players where id = auth.uid();
   if not coalesce(v_is_admin, false) then
     raise exception 'Admin access required';
   end if;
 
-  select status into v_status from vml_players where id = p_player_id;
+  select status, name into v_status, v_name from vml_players where id = p_player_id;
   if v_status is null then
     raise exception 'Player not found';
   end if;
@@ -190,7 +211,20 @@ begin
     raise exception 'Player is not pending approval (status: %)', v_status;
   end if;
 
-  v_member_id := 'VML' || lpad(nextval('vml_member_seq')::text, 4, '0');
+  -- Member ID = first letter of the player's name + a 4-digit number that's
+  -- sequential *within that letter*, first-come-first-served (e.g. A0001,
+  -- A0002 for names starting with A; B0001 for the first B). Falls back to
+  -- the 'X' bucket for a name that doesn't start with a plain A-Z letter.
+  v_letter := upper(left(trim(v_name), 1));
+  if v_letter !~ '^[A-Z]$' then
+    v_letter := 'X';
+  end if;
+
+  insert into vml_member_id_counters (letter, next_num) values (v_letter, 1)
+  on conflict (letter) do update set next_num = vml_member_id_counters.next_num + 1
+  returning next_num into v_num;
+
+  v_member_id := v_letter || lpad(v_num::text, 4, '0');
 
   update vml_players
     set status = 'active',
@@ -240,9 +274,14 @@ grant execute on function public.vml_reject_player(uuid) to authenticated;
 -- Raw scores must sum to the fixed pool total for the category (140000 for
 -- traditional, 2040 for taiwanese); rank_points (30/20/10/5) are computed
 -- server-side from the score order, never accepted as client input.
+-- Return type changed (uuid -> table with match_code) from an earlier
+-- version -- CREATE OR REPLACE can't change a function's return type, so
+-- the old signature must be dropped first (see postgres_rls_gotchas #9).
+drop function if exists public.vml_create_match(uuid[],integer[],text,date);
+
 create or replace function public.vml_create_match(
   p_player_ids uuid[], p_scores integer[], p_category text, p_match_date date default current_date
-) returns uuid
+) returns table(id uuid, match_code text)
 language plpgsql
 security definer
 set search_path = public, extensions
@@ -250,10 +289,13 @@ as $$
 declare
   v_uid uuid := auth.uid();
   v_match_id uuid;
+  v_match_code text;
+  v_code_chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; -- no 0/O/1/I, easy to misread aloud
   v_pool_total integer;
   v_sum integer;
   v_active_count integer;
   v_match_date date := coalesce(p_match_date, current_date);
+  i integer;
 begin
   if v_uid is null then
     raise exception 'Must be signed in';
@@ -295,8 +337,19 @@ begin
 
   v_match_id := extensions.gen_random_uuid();
 
-  insert into vml_matches (id, created_by, category, match_date, status)
-  values (v_match_id, v_uid, p_category, v_match_date, 'pending_confirm');
+  -- Short human-readable reference code (e.g. Z567C), independent of the
+  -- internal uuid -- generated here, not left to the client, and retried
+  -- on the astronomically rare collision against the unique index.
+  loop
+    v_match_code := '';
+    for i in 1..5 loop
+      v_match_code := v_match_code || substr(v_code_chars, 1 + floor(random() * length(v_code_chars))::int, 1);
+    end loop;
+    exit when not exists (select 1 from vml_matches m where m.match_code = v_match_code);
+  end loop;
+
+  insert into vml_matches (id, match_code, created_by, category, match_date, status)
+  values (v_match_id, v_match_code, v_uid, p_category, v_match_date, 'pending_confirm');
 
   insert into vml_match_entries (match_id, player_id, score, rank_points)
   select v_match_id, pid, sc,
@@ -305,7 +358,7 @@ begin
     end
   from unnest(p_player_ids, p_scores) as t(pid, sc);
 
-  return v_match_id;
+  return query select v_match_id, v_match_code;
 end;
 $$;
 
@@ -457,14 +510,16 @@ revoke all on function public.vml_my_profile() from public;
 grant execute on function public.vml_my_profile() to authenticated;
 
 -- Matches awaiting the caller's own confirmation.
+drop function if exists public.vml_my_pending_confirmations();
+
 create or replace function public.vml_my_pending_confirmations()
-returns table(match_id uuid, category text, match_date date, creator_name text, created_at timestamptz)
+returns table(match_id uuid, match_code text, category text, match_date date, creator_name text, created_at timestamptz)
 language sql
 security definer
 set search_path = public, extensions
 stable
 as $$
-  select m.id, m.category, m.match_date, cr.name, m.created_at
+  select m.id, m.match_code, m.category, m.match_date, cr.name, m.created_at
   from vml_matches m
   join vml_match_entries e on e.match_id = m.id and e.player_id = auth.uid()
   join vml_players cr on cr.id = m.created_by
@@ -557,8 +612,10 @@ revoke all on function public.vml_admin_member_list(text) from public;
 grant execute on function public.vml_admin_member_list(text) to authenticated;
 
 -- Admin-only: matches under dispute, for visibility.
+drop function if exists public.vml_admin_rejected_matches();
+
 create or replace function public.vml_admin_rejected_matches()
-returns table(match_id uuid, category text, match_date date, creator_name text,
+returns table(match_id uuid, match_code text, category text, match_date date, creator_name text,
               rejected_reason text, created_at timestamptz)
 language plpgsql
 security definer
@@ -570,7 +627,7 @@ begin
   end if;
 
   return query
-  select m.id, m.category, m.match_date, p.name, m.rejected_reason, m.created_at
+  select m.id, m.match_code, m.category, m.match_date, p.name, m.rejected_reason, m.created_at
   from vml_matches m
   join vml_players p on p.id = m.created_by
   where m.status = 'rejected'

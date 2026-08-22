@@ -53,7 +53,7 @@ input,select{width:100%;background:var(--surface);border:1px solid var(--border)
 <body>
 
 <div class="header">
-  <div class="header-title">🀄 My Dashboard</div>
+  <div class="header-title"><img src="ttml-logo.png" alt="TTML" style="width:22px;height:22px;object-fit:contain;vertical-align:middle;margin-right:6px;">My Dashboard</div>
   <div class="header-actions">
     <a href="leaderboard.html">Leaderboard</a>
     <a href="#" id="admin-link" style="display:none;" onclick="window.location.href='admin.html'">Admin</a>
@@ -218,14 +218,15 @@ async function submitMatch() {
   }
 
   document.getElementById('log-match-btn').disabled = true;
-  var { error } = await vmlClient.rpc('vml_create_match', {
+  var { data, error } = await vmlClient.rpc('vml_create_match', {
     p_player_ids: playerIds, p_scores: scores, p_category: category, p_match_date: matchDate
   });
   document.getElementById('log-match-btn').disabled = false;
 
   if (error) { showMatchMsg(error.message, 'error'); return; }
 
-  showMatchMsg('✅ Match logged! Waiting for the other 3 players to confirm.', 'success');
+  var matchCode = data && data[0] && data[0].match_code;
+  showMatchMsg('✅ Match logged! Reference code <strong>' + matchCode + '</strong> — keep it for your records. Waiting for the other 3 players to confirm.', 'success');
   document.getElementById('score-me').value = '';
   for (var j = 1; j <= 3; j++) {
     document.getElementById('player-' + j + '-id').value = '';
@@ -246,10 +247,9 @@ async function loadPendingConfirmations() {
   }
 
   listEl.innerHTML = rows.map(function (r) {
-    var shortId = r.match_id.slice(0, 8).toUpperCase();
     return '<div class="pending-item" id="pending-' + r.match_id + '">'
       + '<div class="top"><span class="cat">' + (r.category === 'traditional' ? '🀄 Traditional' : '🏆 Taiwanese') + '</span><span class="date">' + r.match_date + '</span></div>'
-      + '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Match #' + shortId + '</div>'
+      + '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Match code: <strong>' + r.match_code + '</strong></div>'
       + '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Logged by ' + r.creator_name + '</div>'
       + '<div class="detail-rows" id="detail-' + r.match_id + '"></div>'
       + '<div class="detail-actions">'

@@ -37,7 +37,7 @@ td{padding:6px 4px;border-bottom:1px solid var(--surface);}
 <body>
 
 <div class="header">
-  <div class="header-title">🀄 Admin</div>
+  <div class="header-title"><img src="ttml-logo.png" alt="TTML" style="width:22px;height:22px;object-fit:contain;vertical-align:middle;margin-right:6px;">Admin</div>
   <div style="display:flex;gap:8px;">
     <a href="dashboard.html">Dashboard</a>
     <button onclick="doLogout()">Log out</button>
@@ -135,7 +135,7 @@ async function loadDisputed() {
   if (!rows.length) { el.innerHTML = '<div class="empty-note">No disputed matches.</div>'; return; }
   el.innerHTML = rows.map(function (r) {
     return '<div class="reg-item">'
-      + '<div class="reg-info"><div class="name">' + (r.category === 'traditional' ? '🀄 Traditional' : '🏆 Taiwanese') + ' — ' + r.match_date + '</div>'
+      + '<div class="reg-info"><div class="name">' + (r.category === 'traditional' ? '🀄 Traditional' : '🏆 Taiwanese') + ' — ' + r.match_date + ' (code: ' + r.match_code + ')</div>'
       + '<div class="meta">Logged by ' + r.creator_name + (r.rejected_reason ? (' · "' + r.rejected_reason + '"') : '') + '</div></div>'
       + '</div>';
   }).join('');
