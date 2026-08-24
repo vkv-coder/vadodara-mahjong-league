@@ -414,6 +414,9 @@ begin
   if not coalesce((select vp.is_admin from vml_players vp where vp.id = auth.uid()), false) then
     raise exception 'Admin access required';
   end if;
+  if p_player_id = auth.uid() then
+    raise exception 'You cannot pause your own account';
+  end if;
 
   if p_paused then
     update vml_players set status = 'paused' where id = p_player_id and status = 'active';
@@ -444,6 +447,9 @@ declare
 begin
   if not coalesce((select vp.is_admin from vml_players vp where vp.id = auth.uid()), false) then
     raise exception 'Admin access required';
+  end if;
+  if p_player_id = auth.uid() then
+    raise exception 'You cannot delete your own account';
   end if;
 
   select exists(select 1 from vml_match_entries me where me.player_id = p_player_id) into v_has_matches;

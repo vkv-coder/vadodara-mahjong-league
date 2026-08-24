@@ -81,6 +81,8 @@ td{padding:6px 4px;border-bottom:1px solid var(--surface);}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/vml-common.js"></script>
 <script>
+var myAdminId = null;
+
 window.addEventListener('DOMContentLoaded', async function () {
   var { data: { session } } = await vmlClient.auth.getSession();
   if (!session) { window.location.href='login.html'; return; }
@@ -91,6 +93,7 @@ window.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('denied').style.display = 'block';
     return;
   }
+  myAdminId = profile.id;
 
   document.getElementById('main').style.display = 'block';
   loadPending();
@@ -215,12 +218,16 @@ async function loadMembers() {
 
     var actions = '<div class="row-actions">';
     actions += '<a class="btn-xs btn-wa" href="' + waLink(r.mobile, WA_WELCOME_MSG) + '" target="_blank" rel="noopener">WA</a>';
-    if (r.status === 'active') {
-      actions += '<button class="btn-xs" style="background:#FDF3E7;color:#B9770E;" onclick="pausePlayer(\'' + r.id + '\',true)">Pause</button>';
-    } else if (r.status === 'paused') {
-      actions += '<button class="btn-xs" style="background:#E3F5E8;color:#1E7A46;" onclick="pausePlayer(\'' + r.id + '\',false)">Unpause</button>';
+    if (r.id === myAdminId) {
+      actions += '<span style="font-size:11px;color:var(--muted);">(you)</span>';
+    } else {
+      if (r.status === 'active') {
+        actions += '<button class="btn-xs" style="background:#FDF3E7;color:#B9770E;" onclick="pausePlayer(\'' + r.id + '\',true)">Pause</button>';
+      } else if (r.status === 'paused') {
+        actions += '<button class="btn-xs" style="background:#E3F5E8;color:#1E7A46;" onclick="pausePlayer(\'' + r.id + '\',false)">Unpause</button>';
+      }
+      actions += '<button class="btn-xs" style="background:#FBEAEA;color:var(--red);" onclick="deletePlayer(\'' + r.id + '\',\'' + r.name.replace(/'/g, "\\'") + '\')">Delete</button>';
     }
-    actions += '<button class="btn-xs" style="background:#FBEAEA;color:var(--red);" onclick="deletePlayer(\'' + r.id + '\',\'' + r.name.replace(/'/g, "\\'") + '\')">Delete</button>';
     actions += '</div>';
 
     return '<tr><td>' + (r.member_id || '-') + '</td><td>' + r.name + '</td><td>' + r.mobile + '</td><td class="' + statusClass + '">' + statusLabel + '</td><td>' + actions + '</td></tr>';
