@@ -20,18 +20,26 @@ create table if not exists public.vml_players (
   mobile              text not null,
   email               text not null,
   status              text not null default 'pending_payment'
-                        check (status in ('pending_payment','pending_approval','active','rejected')),
+                        check (status in ('pending_payment','pending_approval','active','paused','rejected')),
   is_admin            boolean not null default false,
   registered_at       timestamptz not null default now(),
   expires_at          timestamptz,
   razorpay_payment_id text,
   razorpay_order_ref  text,
   bonus_points        integer not null default 0,
+  renewal_pending     boolean not null default false,
   created_at          timestamptz not null default now()
 );
 
 -- Idempotent for a database that already ran an earlier version.
 alter table public.vml_players add column if not exists bonus_points integer not null default 0;
+alter table public.vml_players add column if not exists renewal_pending boolean not null default false;
+
+-- 'paused' didn't exist in the original CHECK constraint -- drop and
+-- recreate it so this migration stays safely re-runnable.
+alter table public.vml_players drop constraint if exists vml_players_status_check;
+alter table public.vml_players add constraint vml_players_status_check
+  check (status in ('pending_payment','pending_approval','active','paused','rejected'));
 
 create index if not exists vml_players_order_ref_idx on public.vml_players(razorpay_order_ref);
 
@@ -299,6 +307,158 @@ revoke all on function public.vml_reject_player(uuid) from public;
 grant execute on function public.vml_reject_player(uuid) to authenticated;
 
 -- ============================================================================
+-- Manual UPI payment flow (Razorpay dropped) -- the club owner shows her own
+-- UPI ID/QR, a player self-reports "I've paid," and an admin manually
+-- verifies + approves from the admin panel. No payment gateway involved.
+-- ============================================================================
+
+-- Self-service: the signed-in player confirms they've sent the UPI payment.
+-- Only moves their OWN row, only from pending_payment -> pending_approval.
+create or replace function public.vml_mark_payment_submitted() returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  update vml_players set status = 'pending_approval'
+  where id = auth.uid() and status = 'pending_payment';
+
+  if not found then
+    raise exception 'No pending payment found for your account';
+  end if;
+end;
+$$;
+
+revoke all on function public.vml_mark_payment_submitted() from public;
+grant execute on function public.vml_mark_payment_submitted() to authenticated;
+
+-- Self-service: an already-active member confirms they've sent their
+-- renewal UPI payment. Flags renewal_pending for the admin queue --
+-- doesn't touch expires_at itself (that only happens on admin approval).
+create or replace function public.vml_mark_renewal_submitted() returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  update vml_players set renewal_pending = true
+  where id = auth.uid() and status = 'active';
+
+  if not found then
+    raise exception 'Not an active member';
+  end if;
+end;
+$$;
+
+revoke all on function public.vml_mark_renewal_submitted() from public;
+grant execute on function public.vml_mark_renewal_submitted() to authenticated;
+
+-- Admin-only: list of active members who reported a renewal payment.
+create or replace function public.vml_admin_pending_renewals()
+returns table(id uuid, member_id text, name text, mobile text, email text, expires_at timestamptz)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not coalesce((select vp.is_admin from vml_players vp where vp.id = auth.uid()), false) then
+    raise exception 'Admin access required';
+  end if;
+
+  return query
+  select p.id, p.member_id, p.name, p.mobile, p.email, p.expires_at
+  from vml_players p
+  where p.renewal_pending = true
+  order by p.expires_at asc;
+end;
+$$;
+
+revoke all on function public.vml_admin_pending_renewals() from public;
+grant execute on function public.vml_admin_pending_renewals() to authenticated;
+
+-- Admin-only: confirms a reported renewal payment, extends membership 1
+-- year from today, clears the pending flag.
+create or replace function public.vml_approve_renewal(p_player_id uuid) returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not coalesce((select vp.is_admin from vml_players vp where vp.id = auth.uid()), false) then
+    raise exception 'Admin access required';
+  end if;
+
+  update vml_players
+    set expires_at = now() + interval '1 year',
+        renewal_pending = false
+    where id = p_player_id and renewal_pending = true;
+
+  if not found then
+    raise exception 'Player not found or has no pending renewal';
+  end if;
+end;
+$$;
+
+revoke all on function public.vml_approve_renewal(uuid) from public;
+grant execute on function public.vml_approve_renewal(uuid) to authenticated;
+
+-- Admin-only: temporarily hides an active member from the leaderboard and
+-- blocks their login-driven access without losing their history/points --
+-- reversible via the same function with p_paused = false.
+create or replace function public.vml_admin_set_paused(p_player_id uuid, p_paused boolean) returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not coalesce((select vp.is_admin from vml_players vp where vp.id = auth.uid()), false) then
+    raise exception 'Admin access required';
+  end if;
+
+  if p_paused then
+    update vml_players set status = 'paused' where id = p_player_id and status = 'active';
+    if not found then raise exception 'Player not found or not currently active'; end if;
+  else
+    update vml_players set status = 'active' where id = p_player_id and status = 'paused';
+    if not found then raise exception 'Player not found or not currently paused'; end if;
+  end if;
+end;
+$$;
+
+revoke all on function public.vml_admin_set_paused(uuid,boolean) from public;
+grant execute on function public.vml_admin_set_paused(uuid,boolean) to authenticated;
+
+-- Admin-only: permanently removes a member's profile row. Blocked if they
+-- have any match history, since deleting them would corrupt other real
+-- players' leaderboard totals for matches they were part of -- Pause is the
+-- right tool for a member with a real playing history; Delete is meant for
+-- a bad/duplicate/never-played registration. Does NOT touch their
+-- auth.users login (shared identity across other apps on this project).
+create or replace function public.vml_admin_delete_player(p_player_id uuid) returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_has_matches boolean;
+begin
+  if not coalesce((select vp.is_admin from vml_players vp where vp.id = auth.uid()), false) then
+    raise exception 'Admin access required';
+  end if;
+
+  select exists(select 1 from vml_match_entries me where me.player_id = p_player_id) into v_has_matches;
+  if v_has_matches then
+    raise exception 'This member has match history — use Pause instead to keep the leaderboard accurate.';
+  end if;
+
+  delete from vml_players where id = p_player_id;
+end;
+$$;
+
+revoke all on function public.vml_admin_delete_player(uuid) from public;
+grant execute on function public.vml_admin_delete_player(uuid) to authenticated;
+
+-- ============================================================================
 -- Match logging / confirmation RPCs
 -- ============================================================================
 
@@ -535,15 +695,17 @@ revoke all on function public.vml_lookup_member(text) from public;
 grant execute on function public.vml_lookup_member(text) to authenticated;
 
 -- Caller's own profile.
+drop function if exists public.vml_my_profile();
+
 create or replace function public.vml_my_profile()
 returns table(id uuid, member_id text, name text, email text, mobile text,
-              status text, is_admin boolean, expires_at timestamptz)
+              status text, is_admin boolean, expires_at timestamptz, renewal_pending boolean)
 language sql
 security definer
 set search_path = public, extensions
 stable
 as $$
-  select id, member_id, name, email, mobile, status, is_admin, expires_at
+  select id, member_id, name, email, mobile, status, is_admin, expires_at, renewal_pending
   from vml_players where id = auth.uid();
 $$;
 

@@ -32,6 +32,10 @@ th{text-align:left;color:var(--muted);font-weight:600;padding:6px 4px;border-bot
 td{padding:6px 4px;border-bottom:1px solid var(--surface);}
 .status-active{color:#1E7A46;font-weight:600;}
 .status-expired{color:var(--red);font-weight:600;}
+.status-paused{color:#B9770E;font-weight:600;}
+.btn-wa{background:#E3F5E8;color:#1E7A46;}
+.row-actions{display:flex;gap:4px;flex-wrap:wrap;}
+.btn-xs{padding:5px 8px;border-radius:6px;font-size:11px;font-weight:600;border:none;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -52,6 +56,11 @@ td{padding:6px 4px;border-bottom:1px solid var(--surface);}
   </div>
 
   <div class="card">
+    <h2>Pending Renewals</h2>
+    <div id="renewals-list"><div class="empty-note">Loading...</div></div>
+  </div>
+
+  <div class="card">
     <h2>Disputed Matches</h2>
     <div id="disputed-list"><div class="empty-note">Loading...</div></div>
   </div>
@@ -60,7 +69,7 @@ td{padding:6px 4px;border-bottom:1px solid var(--surface);}
     <h2>Members</h2>
     <input type="text" id="member-search" placeholder="Search by name, member ID, or mobile" oninput="debouncedSearch()">
     <table>
-      <thead><tr><th>Member ID</th><th>Name</th><th>Mobile</th><th>Status</th></tr></thead>
+      <thead><tr><th>Member ID</th><th>Name</th><th>Mobile</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody id="member-rows"></tbody>
     </table>
   </div>
@@ -85,9 +94,17 @@ window.addEventListener('DOMContentLoaded', async function () {
 
   document.getElementById('main').style.display = 'block';
   loadPending();
+  loadRenewals();
   loadDisputed();
   loadMembers();
 });
+
+// India-only assumption (matches every other number already in this app) --
+// strips any non-digits and prefixes country code 91 for wa.me links.
+function waLink(mobile) {
+  var digits = (mobile || '').replace(/\D/g, '');
+  return 'https://wa.me/91' + digits.slice(-10);
+}
 
 async function loadPending() {
   var { data, error } = await vmlClient.rpc('vml_admin_pending_registrations');
@@ -103,10 +120,38 @@ async function loadPending() {
     return '<div class="reg-item">'
       + '<div class="reg-info"><div class="name">' + r.name + '</div><div class="meta">' + r.email + ' · ' + r.mobile + '</div></div>'
       + '<div class="reg-actions">'
+      + '<a class="btn-sm btn-wa" href="' + waLink(r.mobile) + '" target="_blank" rel="noopener">WhatsApp</a>'
       + '<button class="btn-sm btn-approve" onclick="approvePlayer(\'' + r.id + '\')">Approve</button>'
       + '<button class="btn-sm btn-reject" onclick="rejectPlayer(\'' + r.id + '\')">Reject</button>'
       + '</div></div>';
   }).join('');
+}
+
+async function loadRenewals() {
+  var { data, error } = await vmlClient.rpc('vml_admin_pending_renewals');
+  var el = document.getElementById('renewals-list');
+  if (error) {
+    console.error('vml_admin_pending_renewals failed:', error);
+    el.innerHTML = '<div class="empty-note" style="color:var(--red);">Error loading pending renewals: ' + error.message + '</div>';
+    return;
+  }
+  var rows = data || [];
+  if (!rows.length) { el.innerHTML = '<div class="empty-note">No pending renewals.</div>'; return; }
+  el.innerHTML = rows.map(function (r) {
+    return '<div class="reg-item">'
+      + '<div class="reg-info"><div class="name">' + r.name + ' (' + r.member_id + ')</div><div class="meta">' + r.email + ' · ' + r.mobile + ' · was valid until ' + new Date(r.expires_at).toLocaleDateString('en-IN') + '</div></div>'
+      + '<div class="reg-actions">'
+      + '<a class="btn-sm btn-wa" href="' + waLink(r.mobile) + '" target="_blank" rel="noopener">WhatsApp</a>'
+      + '<button class="btn-sm btn-approve" onclick="approveRenewal(\'' + r.id + '\')">Approve</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+async function approveRenewal(id) {
+  var { error } = await vmlClient.rpc('vml_approve_renewal', { p_player_id: id });
+  if (error) { alert(error.message); return; }
+  alert('Renewal approved — extended 1 year from today.');
+  loadRenewals(); loadMembers();
 }
 
 async function approvePlayer(id) {
@@ -152,17 +197,41 @@ async function loadMembers() {
   var { data, error } = await vmlClient.rpc('vml_admin_member_list', { p_search: q });
   if (error) {
     console.error('vml_admin_member_list failed:', error);
-    document.getElementById('member-rows').innerHTML = '<tr><td colspan="4" style="color:var(--red);">Error: ' + error.message + '</td></tr>';
+    document.getElementById('member-rows').innerHTML = '<tr><td colspan="5" style="color:var(--red);">Error: ' + error.message + '</td></tr>';
     return;
   }
   var rows = data || [];
   var now = new Date();
   document.getElementById('member-rows').innerHTML = rows.map(function (r) {
     var expired = r.expires_at && new Date(r.expires_at) < now;
-    var statusLabel = r.status === 'active' ? (expired ? 'Lapsed' : 'Active') : r.status;
-    var statusClass = r.status === 'active' && !expired ? 'status-active' : (expired ? 'status-expired' : '');
-    return '<tr><td>' + (r.member_id || '-') + '</td><td>' + r.name + '</td><td>' + r.mobile + '</td><td class="' + statusClass + '">' + statusLabel + '</td></tr>';
+    var statusLabel = r.status === 'active' ? (expired ? 'Lapsed' : 'Active') : r.status === 'paused' ? 'Paused' : r.status;
+    var statusClass = r.status === 'active' && !expired ? 'status-active' : r.status === 'paused' ? 'status-paused' : (expired ? 'status-expired' : '');
+
+    var actions = '<div class="row-actions">';
+    actions += '<a class="btn-xs btn-wa" href="' + waLink(r.mobile) + '" target="_blank" rel="noopener">WA</a>';
+    if (r.status === 'active') {
+      actions += '<button class="btn-xs" style="background:#FDF3E7;color:#B9770E;" onclick="pausePlayer(\'' + r.id + '\',true)">Pause</button>';
+    } else if (r.status === 'paused') {
+      actions += '<button class="btn-xs" style="background:#E3F5E8;color:#1E7A46;" onclick="pausePlayer(\'' + r.id + '\',false)">Unpause</button>';
+    }
+    actions += '<button class="btn-xs" style="background:#FBEAEA;color:var(--red);" onclick="deletePlayer(\'' + r.id + '\',\'' + r.name.replace(/'/g, "\\'") + '\')">Delete</button>';
+    actions += '</div>';
+
+    return '<tr><td>' + (r.member_id || '-') + '</td><td>' + r.name + '</td><td>' + r.mobile + '</td><td class="' + statusClass + '">' + statusLabel + '</td><td>' + actions + '</td></tr>';
   }).join('');
+}
+
+async function pausePlayer(id, paused) {
+  var { error } = await vmlClient.rpc('vml_admin_set_paused', { p_player_id: id, p_paused: paused });
+  if (error) { alert(error.message); return; }
+  loadMembers();
+}
+
+async function deletePlayer(id, name) {
+  if (!confirm('Permanently delete ' + name + '\'s membership? This cannot be undone. (Blocked automatically if they have match history.)')) return;
+  var { error } = await vmlClient.rpc('vml_admin_delete_player', { p_player_id: id });
+  if (error) { alert(error.message); return; }
+  loadMembers();
 }
 
 async function doLogout() {

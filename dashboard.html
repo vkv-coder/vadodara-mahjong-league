@@ -6,7 +6,7 @@
 <title>Dashboard — Vadodara Mahjong League</title>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#EAF4EA" />
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#EAF4EA;--surface:#F5FAF6;--card:#FFFFFF;--border:#D7E8DA;--gold:#2E9E60;--text:#1B4D2E;--muted:#5B6B5B;--radius:12px;--red:#c0392b;--amber:#B9770E;}
@@ -70,7 +70,13 @@ input,select{width:100%;background:var(--surface);border:1px solid var(--border)
     <div class="profile-row"><span class="k">Valid Until</span><span class="v" id="p-expires">-</span></div>
     <div id="expiry-note"></div>
     <div id="renew-section" style="display:none;margin-top:12px;">
-      <button class="btn btn-outline" id="renew-btn" onclick="startRenewal()">Renew Membership (₹<span id="renew-fee"></span>)</button>
+      <div id="renew-pending-note" style="display:none;font-size:12px;color:var(--amber);background:#FDF3E7;padding:10px;border-radius:8px;margin-bottom:10px;">⏳ Renewal payment submitted — awaiting admin approval.</div>
+      <div id="renew-pay-block">
+        <div class="qr-wrap" style="text-align:center;margin-bottom:10px;"><canvas id="renew-upi-qr"></canvas></div>
+        <div style="font-size:13px;font-weight:700;text-align:center;margin-bottom:4px;" id="renew-upi-id-text"></div>
+        <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:10px;">Pay ₹<span id="renew-fee"></span> via any UPI app, then confirm below</div>
+        <button class="btn btn-outline" id="renew-btn" onclick="markRenewalSubmitted()">I've Completed the Renewal Payment</button>
+      </div>
       <div id="renew-msg"></div>
     </div>
   </div>
@@ -136,12 +142,26 @@ function renderProfile() {
 
   var daysLeft = Math.floor((expires - new Date()) / (1000 * 60 * 60 * 24));
   var noteEl = document.getElementById('expiry-note');
+  var showRenew = false;
   if (daysLeft < 0) {
     noteEl.innerHTML = '<div class="expiry-expired">Your membership has lapsed — you\'re hidden from the leaderboard and can\'t log or confirm matches until you renew.</div>';
-    document.getElementById('renew-section').style.display = 'block';
+    showRenew = true;
   } else if (daysLeft <= 30) {
     noteEl.innerHTML = '<div class="expiry-warning">Your membership expires in ' + daysLeft + ' day(s) — renew soon to stay on the leaderboard.</div>';
+    showRenew = true;
+  }
+
+  if (showRenew) {
     document.getElementById('renew-section').style.display = 'block';
+    if (myProfile.renewal_pending) {
+      document.getElementById('renew-pending-note').style.display = 'block';
+      document.getElementById('renew-pay-block').style.display = 'none';
+    } else {
+      document.getElementById('renew-pending-note').style.display = 'none';
+      document.getElementById('renew-pay-block').style.display = 'block';
+      document.getElementById('renew-upi-id-text').textContent = VML_OWNER_UPI_ID;
+      vmlRenderUpiQr(document.getElementById('renew-upi-qr'), RENEWAL_FEE_INR, 'VML Renewal - ' + myProfile.name);
+    }
   }
 }
 
@@ -287,31 +307,19 @@ async function doDispute(matchId) {
   loadPendingConfirmations();
 }
 
-async function startRenewal() {
+async function markRenewalSubmitted() {
   document.getElementById('renew-btn').disabled = true;
-  var orderRef = vmlNewOrderRef('VML-RENEW');
-  var { error } = await vmlClient.rpc('vml_start_renewal', { p_razorpay_order_ref: orderRef });
+  var { error } = await vmlClient.rpc('vml_mark_renewal_submitted');
+  document.getElementById('renew-btn').disabled = false;
+
   if (error) {
-    document.getElementById('renew-btn').disabled = false;
     document.getElementById('renew-msg').innerHTML = '<div class="msg error">' + error.message + '</div>';
     return;
   }
 
-  vmlOpenRazorpay({
-    amountInr: RENEWAL_FEE_INR,
-    name: myProfile.name, email: myProfile.email, mobile: myProfile.mobile,
-    description: 'Vadodara Mahjong League — Membership Renewal',
-    orderRef: orderRef,
-    onSuccess: function () {
-      document.getElementById('renew-msg').innerHTML = '<div class="msg success">Payment received! Confirming renewal...</div>';
-      vmlPollProfile(
-        function (p) { return new Date(p.expires_at) > new Date(myProfile.expires_at); },
-        function (p) { myProfile = p; renderProfile(); document.getElementById('renew-msg').innerHTML = '<div class="msg success">✅ Membership renewed until ' + new Date(p.expires_at).toLocaleDateString('en-IN') + '.</div>'; },
-        function () { document.getElementById('renew-msg').innerHTML = '<div class="msg success">Payment received — confirmation may take a minute, refresh shortly.</div>'; }
-      );
-    },
-    onDismiss: function () { document.getElementById('renew-btn').disabled = false; }
-  });
+  myProfile.renewal_pending = true;
+  document.getElementById('renew-msg').innerHTML = '';
+  renderProfile();
 }
 
 async function doLogout() {
