@@ -6,7 +6,7 @@
 <title>Dashboard — Vadodara Mahjong League</title>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#EAF4EA" />
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/lib/browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#EAF4EA;--surface:#F5FAF6;--card:#FFFFFF;--border:#D7E8DA;--gold:#2E9E60;--text:#1B4D2E;--muted:#5B6B5B;--radius:12px;--red:#c0392b;--amber:#B9770E;}
@@ -72,7 +72,7 @@ input,select{width:100%;background:var(--surface);border:1px solid var(--border)
     <div id="renew-section" style="display:none;margin-top:12px;">
       <div id="renew-pending-note" style="display:none;font-size:12px;color:var(--amber);background:#FDF3E7;padding:10px;border-radius:8px;margin-bottom:10px;">⏳ Renewal payment submitted — awaiting admin approval.</div>
       <div id="renew-pay-block">
-        <div class="qr-wrap" style="text-align:center;margin-bottom:10px;"><canvas id="renew-upi-qr"></canvas></div>
+        <div class="qr-wrap" style="text-align:center;margin-bottom:10px;"><div id="renew-upi-qr"></div></div>
         <div style="font-size:13px;font-weight:700;text-align:center;margin-bottom:4px;" id="renew-upi-id-text"></div>
         <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:10px;">Pay ₹<span id="renew-fee"></span> via any UPI app, then confirm below</div>
         <button class="btn btn-outline" id="renew-btn" onclick="markRenewalSubmitted()">I've Completed the Renewal Payment</button>

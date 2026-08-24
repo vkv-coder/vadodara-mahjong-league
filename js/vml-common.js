@@ -33,10 +33,10 @@ function vmlUpiLink(amountInr, note) {
   return 'upi://pay?' + params.toString();
 }
 
-// Renders the UPI QR onto a <canvas> element (requires the qrcode CDN
-// script tag to already be loaded on the page).
-function vmlRenderUpiQr(canvasEl, amountInr, note) {
-  QRCode.toCanvas(canvasEl, vmlUpiLink(amountInr, note), { width: 220, margin: 1 }, function (err) {
-    if (err) console.error('QR render failed:', err);
-  });
+// Renders the UPI QR into a container element (requires the qrcodejs CDN
+// script tag to already be loaded on the page). Clears any previous QR
+// first so re-renders (e.g. re-showing the payment card) don't stack up.
+function vmlRenderUpiQr(containerEl, amountInr, note) {
+  containerEl.innerHTML = '';
+  new QRCode(containerEl, { text: vmlUpiLink(amountInr, note), width: 220, height: 220 });
 }

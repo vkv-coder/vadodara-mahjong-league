@@ -6,7 +6,7 @@
 <title>Register — Vadodara Mahjong League</title>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#EAF4EA" />
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/lib/browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#EAF4EA;--surface:#F5FAF6;--card:#FFFFFF;--border:#D7E8DA;--gold:#2E9E60;--text:#1B4D2E;--muted:#5B6B5B;--radius:12px;--red:#c0392b;}
@@ -59,7 +59,7 @@ input:focus{border-color:var(--gold);}
   <div class="card" id="payment-card" style="display:none;">
     <h2>Membership Payment</h2>
     <div class="fee-note">Annual membership fee: ₹<span id="fee-amount"></span>. Valid for 12 months from today; renew any time before it expires to keep your place on the leaderboard.</div>
-    <div class="qr-wrap"><canvas id="upi-qr"></canvas></div>
+    <div class="qr-wrap"><div id="upi-qr"></div></div>
     <div class="upi-id" id="upi-id-text"></div>
     <div class="upi-copy-hint">Scan with any UPI app, or pay to this UPI ID directly</div>
     <button class="btn" id="pay-btn" onclick="markPaymentSubmitted()">I've Completed the Payment</button>
