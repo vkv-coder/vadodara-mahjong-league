@@ -50,8 +50,10 @@ input:focus{border-color:var(--gold);}
     <input type="tel" id="r-mobile" placeholder="10-digit mobile number">
     <label>Email</label>
     <input type="email" id="r-email" placeholder="you@example.com">
-    <label>Password</label>
-    <input type="password" id="r-password" placeholder="Choose a password">
+    <div id="pw-field-wrap">
+      <label>Password</label>
+      <input type="password" id="r-password" placeholder="Choose a password">
+    </div>
     <button class="btn" id="signup-btn" onclick="doSignup()">Create Account & Continue</button>
     <div id="signup-msg"></div>
   </div>
@@ -82,6 +84,7 @@ input:focus{border-color:var(--gold);}
 <script src="js/vml-common.js"></script>
 <script>
 var regName = '', regMobile = '', regEmail = '';
+var alreadyAuthed = false;
 
 window.addEventListener('DOMContentLoaded', async function () {
   document.getElementById('fee-amount').textContent = REGISTRATION_FEE_INR;
@@ -95,11 +98,24 @@ window.addEventListener('DOMContentLoaded', async function () {
       showStatusCard(profile.status);
       return;
     }
-    // Signed in but not yet paid: skip the signup form, prefill from profile if present.
     regName = (profile && profile.name) || '';
     regMobile = (profile && profile.mobile) || '';
     regEmail = (profile && profile.email) || session.user.email;
-    showPaymentCard();
+
+    if (regName && regMobile) {
+      // Same-session continuation (just signed up moments ago): straight to payment.
+      showPaymentCard();
+    } else {
+      // Already logged in (e.g. a return visit after confirming email) but
+      // name/mobile were never actually captured — don't silently submit
+      // blank values. Ask for them instead of skipping straight to payment.
+      alreadyAuthed = true;
+      document.getElementById('signup-card').style.display = 'block';
+      document.getElementById('r-email').value = regEmail;
+      document.getElementById('r-email').disabled = true;
+      document.getElementById('pw-field-wrap').style.display = 'none';
+      document.getElementById('signup-btn').textContent = 'Continue';
+    }
   }
 });
 
@@ -145,6 +161,17 @@ async function doSignup() {
   var mobile = document.getElementById('r-mobile').value.trim();
   var email = document.getElementById('r-email').value.trim();
   var password = document.getElementById('r-password').value;
+
+  if (alreadyAuthed) {
+    // Already have a session (e.g. returning after confirming email) --
+    // just need name/mobile, no new signUp/password involved.
+    if (!name || !mobile) {
+      showMsg('signup-msg', 'Please fill in your name and mobile number.', 'error'); return;
+    }
+    regName = name; regMobile = mobile;
+    showPaymentCard();
+    return;
+  }
 
   if (!name || !mobile || !email || !password) {
     showMsg('signup-msg', 'Please fill in every field.', 'error'); return;
