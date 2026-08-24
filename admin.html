@@ -101,10 +101,16 @@ window.addEventListener('DOMContentLoaded', async function () {
 
 // India-only assumption (matches every other number already in this app) --
 // strips any non-digits and prefixes country code 91 for wa.me links.
-function waLink(mobile) {
+// Optional text pre-fills the WhatsApp message (still editable before send,
+// never sent automatically).
+function waLink(mobile, text) {
   var digits = (mobile || '').replace(/\D/g, '');
-  return 'https://wa.me/91' + digits.slice(-10);
+  var url = 'https://wa.me/91' + digits.slice(-10);
+  if (text) url += '?text=' + encodeURIComponent(text);
+  return url;
 }
+
+var WA_WELCOME_MSG = 'Welcome to Vadodara Mahjong League, in collaboration with Tea & Tiles Mahjong Lounge! Your membership has been approved, and you can now upload your team\'s scores on the leaderboard.';
 
 async function loadPending() {
   var { data, error } = await vmlClient.rpc('vml_admin_pending_registrations');
@@ -208,7 +214,7 @@ async function loadMembers() {
     var statusClass = r.status === 'active' && !expired ? 'status-active' : r.status === 'paused' ? 'status-paused' : (expired ? 'status-expired' : '');
 
     var actions = '<div class="row-actions">';
-    actions += '<a class="btn-xs btn-wa" href="' + waLink(r.mobile) + '" target="_blank" rel="noopener">WA</a>';
+    actions += '<a class="btn-xs btn-wa" href="' + waLink(r.mobile, WA_WELCOME_MSG) + '" target="_blank" rel="noopener">WA</a>';
     if (r.status === 'active') {
       actions += '<button class="btn-xs" style="background:#FDF3E7;color:#B9770E;" onclick="pausePlayer(\'' + r.id + '\',true)">Pause</button>';
     } else if (r.status === 'paused') {
