@@ -52,13 +52,37 @@ function showMsg(text, type) {
   document.getElementById('login-msg').innerHTML = '<div class="msg ' + type + '">' + text + '</div>';
 }
 
-window.addEventListener('DOMContentLoaded', function () {
+window.addEventListener('DOMContentLoaded', async function () {
+  // Already logged in on this browser (e.g. clicked the Admin/Member Login
+  // link from the home page while a session is still active) -- skip the
+  // form entirely and go straight to the right page, same routing doLogin()
+  // uses after a fresh sign-in.
+  var { data: { session } } = await vmlClient.auth.getSession();
+  if (session) {
+    var { data } = await vmlClient.rpc('vml_my_profile');
+    var profile = data && data[0];
+    routeAfterLogin(profile);
+    return;
+  }
+
   var prefillEmail = new URLSearchParams(window.location.search).get('email');
   if (prefillEmail) {
     document.getElementById('l-email').value = prefillEmail;
     document.getElementById('l-password').focus();
   }
 });
+
+function routeAfterLogin(profile) {
+  if (!profile || profile.status === 'pending_payment') {
+    window.location.href='register.html';
+  } else if (profile.status === 'pending_approval' || profile.status === 'rejected') {
+    window.location.href='register.html';
+  } else if (profile.is_admin) {
+    window.location.href='admin.html';
+  } else {
+    window.location.href='dashboard.html';
+  }
+}
 
 async function doLogin() {
   var email = document.getElementById('l-email').value.trim();
@@ -73,16 +97,7 @@ async function doLogin() {
 
   var { data } = await vmlClient.rpc('vml_my_profile');
   var profile = data && data[0];
-
-  if (!profile || profile.status === 'pending_payment') {
-    window.location.href='register.html';
-  } else if (profile.status === 'pending_approval' || profile.status === 'rejected') {
-    window.location.href='register.html';
-  } else if (profile.is_admin) {
-    window.location.href='admin.html';
-  } else {
-    window.location.href='dashboard.html';
-  }
+  routeAfterLogin(profile);
 }
 </script>
 </body>
