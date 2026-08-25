@@ -43,18 +43,35 @@ alter table public.vml_players add constraint vml_players_status_check
 
 create index if not exists vml_players_order_ref_idx on public.vml_players(razorpay_order_ref);
 
--- Superseded by vml_member_id_counters below (per-first-letter-of-name IDs,
--- e.g. A0001/B0001, instead of one global VML0001/0002 counter) — left in
--- place only because early test members (VML0001-VML0005) already used it;
--- no longer consumed by vml_approve_player.
+-- Superseded twice over: first by vml_member_id_counters (per-letter IDs,
+-- e.g. A0001/B0001), now by vml_global_member_counter below (single global
+-- ascending number, e.g. A001/K002/M003) — left in place only because early
+-- test members (VML0001-VML0005) already used it; no longer consumed.
 create sequence if not exists public.vml_member_seq start 1;
 
--- One row per letter (A-Z, plus a fallback 'X' bucket for a name that
--- doesn't start with a letter), atomically incremented in vml_approve_player.
+-- Superseded by vml_global_member_counter below — a member's number used to
+-- be sequential *within their letter* (A0001, A0002, ... B0001), which made
+-- it impossible to tell total membership count from the IDs. Left in place,
+-- unused, since it's harmless and re-running this migration shouldn't drop
+-- data structures.
 create table if not exists public.vml_member_id_counters (
   letter    char(1) primary key,
   next_num  integer not null default 1
 );
+
+-- Single global counter, atomically incremented in vml_activate_player.
+-- Member IDs are now [first letter of name][3-digit global sequence number],
+-- e.g. A001 for the 1st member ever approved, K002 for the 2nd (regardless
+-- of their letter), M003 for the 3rd, A004 for the 4th (even though it's
+-- also an "A") — so the number alone tells you total membership count.
+-- 3 digits comfortably covers the ~400 members expected.
+create table if not exists public.vml_global_member_counter (
+  id        integer primary key default 1,
+  next_num  integer not null default 1,
+  constraint vml_global_member_counter_singleton check (id = 1)
+);
+insert into public.vml_global_member_counter (id, next_num) values (1, 1)
+  on conflict (id) do nothing;
 
 create table if not exists public.vml_matches (
   id               uuid primary key default extensions.gen_random_uuid(),
@@ -181,20 +198,22 @@ begin
     raise exception 'Player not found';
   end if;
 
-  -- Member ID = first letter of the player's name + a 4-digit number that's
-  -- sequential *within that letter*, first-come-first-served (e.g. A0001,
-  -- A0002 for names starting with A; B0001 for the first B). Falls back to
-  -- the 'X' bucket for a name that doesn't start with a plain A-Z letter.
+  -- Member ID = first letter of the player's name + a 3-digit number that's
+  -- a single global ascending sequence across ALL members, first-come-
+  -- first-served (e.g. A001 for the 1st member ever, K002 for the 2nd, M003
+  -- for the 3rd, A004 for the 4th) -- so the number alone tells you total
+  -- membership count. Falls back to the 'X' bucket for a name that doesn't
+  -- start with a plain A-Z letter.
   v_letter := upper(left(trim(v_name), 1));
   if v_letter !~ '^[A-Z]$' then
     v_letter := 'X';
   end if;
 
-  insert into vml_member_id_counters (letter, next_num) values (v_letter, 1)
-  on conflict (letter) do update set next_num = vml_member_id_counters.next_num + 1
-  returning next_num into v_num;
+  update vml_global_member_counter set next_num = next_num + 1
+  where id = 1
+  returning next_num - 1 into v_num;
 
-  v_member_id := v_letter || lpad(v_num::text, 4, '0');
+  v_member_id := v_letter || lpad(v_num::text, 3, '0');
 
   update vml_players
     set status = 'active',
@@ -846,6 +865,39 @@ $$;
 
 revoke all on function public.vml_admin_rejected_matches() from public;
 grant execute on function public.vml_admin_rejected_matches() to authenticated;
+
+-- ============================================================================
+-- Backfill: renumber every existing member (approved under the old
+-- per-letter scheme, e.g. A0001) onto the new global scheme (e.g. A001),
+-- in original registration order, then point the global counter past the
+-- last number used. Naturally idempotent -- re-running it just recomputes
+-- the same values off the same registration order, as long as no new
+-- member_id is assigned between runs.
+-- ============================================================================
+do $$
+declare
+  r record;
+  v_num integer := 1;
+  v_letter char(1);
+begin
+  for r in
+    select id, name from public.vml_players
+    where member_id is not null
+    order by registered_at asc
+  loop
+    v_letter := upper(left(trim(r.name), 1));
+    if v_letter !~ '^[A-Z]$' then
+      v_letter := 'X';
+    end if;
+    update public.vml_players
+      set member_id = v_letter || lpad(v_num::text, 3, '0')
+      where id = r.id;
+    v_num := v_num + 1;
+  end loop;
+
+  update public.vml_global_member_counter set next_num = v_num where id = 1;
+end;
+$$;
 
 -- ============================================================================
 -- One-time setup: promote the first admin manually after this migration runs,
