@@ -83,7 +83,7 @@ function handlePlayerStatusChange(record, oldRecord) {
       'Hi ' + record.name + ',\n\n' +
       'We\'ve recorded your payment as submitted. The club admin will verify it and approve your ' +
       'membership shortly — you\'ll get another email with your member ID once that\'s done.\n\n' +
-      'Questions? info.anyapps@gmail.com'
+      'Questions? avanipatel0701@gmail.com'
     );
   } else if (oldRecord.status === 'pending_approval' && record.status === 'active') {
     // Admin clicked Approve.
