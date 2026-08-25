@@ -436,6 +436,9 @@ begin
   if p_player_id = auth.uid() then
     raise exception 'You cannot pause your own account';
   end if;
+  if coalesce((select vp.is_admin from vml_players vp where vp.id = p_player_id), false) then
+    raise exception 'Admins cannot be paused';
+  end if;
 
   if p_paused then
     update vml_players set status = 'paused' where id = p_player_id and status = 'active';
@@ -469,6 +472,9 @@ begin
   end if;
   if p_player_id = auth.uid() then
     raise exception 'You cannot delete your own account';
+  end if;
+  if coalesce((select vp.is_admin from vml_players vp where vp.id = p_player_id), false) then
+    raise exception 'Admins cannot be deleted';
   end if;
 
   select exists(select 1 from vml_match_entries me where me.player_id = p_player_id) into v_has_matches;
@@ -813,9 +819,14 @@ revoke all on function public.vml_admin_pending_registrations() from public;
 grant execute on function public.vml_admin_pending_registrations() to authenticated;
 
 -- Admin-only: member list/search.
+-- Return type changed (added is_admin) -- CREATE OR REPLACE can't change a
+-- function's return type, so the old signature must be dropped first (see
+-- postgres_rls_gotchas #9).
+drop function if exists public.vml_admin_member_list(text);
+
 create or replace function public.vml_admin_member_list(p_search text default null)
 returns table(id uuid, member_id text, name text, mobile text, email text,
-              status text, expires_at timestamptz)
+              status text, expires_at timestamptz, is_admin boolean)
 language plpgsql
 security definer
 set search_path = public, extensions
@@ -826,7 +837,7 @@ begin
   end if;
 
   return query
-  select p.id, p.member_id, p.name, p.mobile, p.email, p.status, p.expires_at
+  select p.id, p.member_id, p.name, p.mobile, p.email, p.status, p.expires_at, p.is_admin
   from vml_players p
   where p_search is null
      or p.name ilike '%'||p_search||'%'
