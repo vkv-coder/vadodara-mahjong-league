@@ -685,16 +685,28 @@ drop function if exists public.vml_public_leaderboard(text);
 -- a brand new member with zero matches still shows up with 1000, not
 -- absent from the board entirely, hence the LEFT JOIN via the subquery
 -- rather than an inner join straight off vml_match_entries.
+-- Also includes admin-only accounts (no member_id) so they show up in the
+-- home page's full member/admin list -- but with points forced to null
+-- (rendered blank client-side), since an admin utility account isn't
+-- actually competing in the league.
+-- Return type changed (added is_admin) -- CREATE OR REPLACE can't change a
+-- function's return type, so the old signature must be dropped first (see
+-- postgres_rls_gotchas #9).
+drop function if exists public.vml_public_leaderboard();
+
 create or replace function public.vml_public_leaderboard()
-returns table(member_id text, name text, points bigint, games bigint)
+returns table(member_id text, name text, points bigint, games bigint, is_admin boolean)
 language sql
 security definer
 set search_path = public, extensions
 stable
 as $$
   select p.member_id, p.name,
-         (p.bonus_points + coalesce(mp.total_rank_points, 0))::bigint as points,
-         coalesce(mp.games, 0)::bigint as games
+         case when p.is_admin then null
+              else (p.bonus_points + coalesce(mp.total_rank_points, 0))::bigint
+         end as points,
+         coalesce(mp.games, 0)::bigint as games,
+         p.is_admin
   from vml_players p
   left join (
     select e.player_id, sum(e.rank_points) as total_rank_points, count(*) as games
@@ -703,7 +715,7 @@ as $$
     group by e.player_id
   ) mp on mp.player_id = p.id
   where p.status = 'active' and p.expires_at > now()
-  order by points desc;
+  order by points desc nulls last;
 $$;
 
 revoke all on function public.vml_public_leaderboard() from public;
