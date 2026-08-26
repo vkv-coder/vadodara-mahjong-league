@@ -66,7 +66,10 @@ td{padding:6px 4px;border-bottom:1px solid var(--surface);}
   </div>
 
   <div class="card">
-    <h2>Members</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="margin-bottom:0;">Members</h2>
+      <button class="btn-xs" style="background:var(--surface);color:var(--text);border:1px solid var(--border);" onclick="downloadMembersCsv()">⬇ Download Excel</button>
+    </div>
     <input type="text" id="member-search" placeholder="Search by name, member ID, or mobile" oninput="debouncedSearch()">
     <table>
       <thead><tr><th>Member ID</th><th>Name</th><th>Mobile</th><th>Status</th><th>Actions</th></tr></thead>
@@ -201,6 +204,8 @@ function debouncedSearch() {
   searchTimer = setTimeout(loadMembers, 300);
 }
 
+var lastMemberRows = [];
+
 async function loadMembers() {
   var q = document.getElementById('member-search').value.trim() || null;
   var { data, error } = await vmlClient.rpc('vml_admin_member_list', { p_search: q });
@@ -210,6 +215,7 @@ async function loadMembers() {
     return;
   }
   var rows = data || [];
+  lastMemberRows = rows;
   var now = new Date();
   document.getElementById('member-rows').innerHTML = rows.map(function (r) {
     var expired = r.expires_at && new Date(r.expires_at) < now;
@@ -234,6 +240,40 @@ async function loadMembers() {
 
     return '<tr><td>' + (r.member_id || '-') + '</td><td>' + r.name + '</td><td>' + r.mobile + '</td><td class="' + statusClass + '">' + statusLabel + '</td><td>' + actions + '</td></tr>';
   }).join('');
+}
+
+// Plain CSV (opens directly in Excel/Google Sheets) -- no library needed,
+// and avoids pulling in an xlsx-writing dependency for one button.
+function csvCell(v) {
+  var s = (v === null || v === undefined) ? '' : String(v);
+  if (/[",\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function downloadMembersCsv() {
+  var header = ['Member ID', 'Name', 'Mobile', 'Email', 'Status', 'Expires At', 'Admin'];
+  var lines = [header.map(csvCell).join(',')];
+  lastMemberRows.forEach(function (r) {
+    lines.push([
+      r.member_id || '',
+      r.name,
+      r.mobile,
+      r.email,
+      r.status,
+      r.expires_at ? new Date(r.expires_at).toLocaleDateString('en-IN') : '',
+      r.is_admin ? 'Yes' : ''
+    ].map(csvCell).join(','));
+  });
+
+  var blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'vml-members-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 async function pausePlayer(id, paused) {
