@@ -688,7 +688,9 @@ drop function if exists public.vml_public_leaderboard(text);
 -- Also includes admin-only accounts (no member_id) so they show up in the
 -- home page's full member/admin list -- but with points forced to null
 -- (rendered blank client-side), since an admin utility account isn't
--- actually competing in the league.
+-- actually competing in the league. Gated on member_id being null, NOT on
+-- is_admin -- a real member who also happens to be an admin (e.g. the club
+-- owner) still has a member_id and must show real points.
 -- Return type changed (added is_admin) -- CREATE OR REPLACE can't change a
 -- function's return type, so the old signature must be dropped first (see
 -- postgres_rls_gotchas #9).
@@ -702,7 +704,7 @@ set search_path = public, extensions
 stable
 as $$
   select p.member_id, p.name,
-         case when p.is_admin then null
+         case when p.member_id is null then null
               else (p.bonus_points + coalesce(mp.total_rank_points, 0))::bigint
          end as points,
          coalesce(mp.games, 0)::bigint as games,
