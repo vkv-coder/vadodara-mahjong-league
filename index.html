@@ -148,11 +148,12 @@ async function loadLeaderboard() {
         podiumHtml += '<div class="podium-item"><div class="podium-base ' + style.base + '">' + style.label + '</div></div>';
         return;
       }
-      var initials = p.name.split(' ').map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+      var played = p.games > 0;
+      var initials = played ? p.name.split(' ').map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase() : '–';
       podiumHtml += '<div class="podium-item">'
         + '<div class="podium-crown">' + style.crown + '</div>'
         + '<div class="podium-avatar ' + style.cls + '">' + initials + '</div>'
-        + '<div class="podium-name">' + p.name + '</div>'
+        + '<div class="podium-name">' + (played ? p.name : '') + '</div>'
         + '<div class="podium-id">' + p.member_id + '</div>'
         + '<div class="podium-points">' + p.points + ' pts</div>'
         + '<div class="podium-base ' + style.base + '">' + style.label + '</div>'
@@ -164,7 +165,7 @@ async function loadLeaderboard() {
     document.getElementById('rest-section').innerHTML = rest.map(function (p, i) {
       return '<div class="rank-card">'
         + '<div class="rank-num">' + (i + 4) + '</div>'
-        + '<div class="rank-info"><div class="rank-name">' + p.name + '</div><div class="rank-id">' + p.member_id + '</div></div>'
+        + '<div class="rank-info"><div class="rank-name">' + (p.games > 0 ? p.name : '') + '</div><div class="rank-id">' + p.member_id + '</div></div>'
         + '<div><div class="rank-points">' + p.points + '</div><div class="rank-pts-label">pts</div></div>'
         + '</div>';
     }).join('');
