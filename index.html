@@ -42,6 +42,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 .podium-base.bronze{background:linear-gradient(135deg,#e67e2233,#d3540022);border:1px solid #e67e2244;height:36px;color:#e67e22;}
 .rank-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;}
 .rank-num{font-size:18px;font-weight:700;color:var(--muted);min-width:28px;text-align:center;}
+.rank-mid{font-size:12px;font-weight:700;color:var(--gold);min-width:34px;text-align:center;}
 .rank-info{flex:1;}
 .rank-name{font-size:14px;font-weight:600;color:var(--text);}
 .rank-id{font-size:11px;color:var(--muted);}
@@ -115,6 +116,17 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/vml-common.js"></script>
 <script>
+function ordinal(n) {
+  var rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return n + 'th';
+  switch (n % 10) {
+    case 1: return n + 'st';
+    case 2: return n + 'nd';
+    case 3: return n + 'rd';
+    default: return n + 'th';
+  }
+}
+
 function openHowItWorks(){document.getElementById('how-modal').classList.add('open');}
 function closeHowItWorks(){document.getElementById('how-modal').classList.remove('open');}
 
@@ -173,9 +185,18 @@ async function loadLeaderboard() {
     podiumHtml += '</div>';
     document.getElementById('podium-section').innerHTML = podiumHtml;
 
+    // Rank (4th, 5th, ...) only means something once a player has actually
+    // earned points above the flat 1000 welcome bonus via a confirmed
+    // match -- everyone still sitting at exactly 1000 hasn't been placed
+    // yet, so they're listed with no rank at all. rest[] is already sorted
+    // by points desc, so qualifying players are always at the top of it.
+    var rankCounter = 4;
     document.getElementById('rest-section').innerHTML = rest.map(function (p) {
+      var ranked = p.points != null && p.points > 1000;
+      var rankLabel = ranked ? ordinal(rankCounter++) : '';
       return '<div class="rank-card">'
         + '<div class="rank-info"><div class="rank-name">' + p.name + '</div><div class="rank-id">' + (p.member_id || '') + '</div></div>'
+        + '<div class="rank-mid">' + rankLabel + '</div>'
         + '<div><div class="rank-points">' + (p.points != null ? p.points : '') + '</div><div class="rank-pts-label">' + (p.points != null ? 'pts' : '') + '</div></div>'
         + '</div>';
     }).join('');
