@@ -82,13 +82,8 @@ input,select{width:100%;background:var(--surface);border:1px solid var(--border)
   </div>
 
   <div class="card">
-    <h2>Matches Awaiting Your Confirmation</h2>
-    <div id="pending-list"><div class="empty-note">Loading...</div></div>
-  </div>
-
-  <div class="card">
     <h2>➕ Log a New Match</h2>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">This starts a brand new match report — unrelated to anything shown above. Only use this once per game you played.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter all 4 players' scores. Once they sum to the right total for the category, the match is recorded instantly and the leaderboard updates right away.</div>
     <label>Category</label>
     <select id="m-category">
       <option value="traditional">🀄 Traditional (scores sum to 140000)</option>
@@ -130,8 +125,6 @@ window.addEventListener('DOMContentLoaded', async function () {
   document.getElementById('m-date').max = new Date().toISOString().slice(0, 10);
   document.getElementById('m-date').value = new Date().toISOString().slice(0, 10);
   document.getElementById('renew-fee').textContent = RENEWAL_FEE_INR;
-
-  loadPendingConfirmations();
 });
 
 function renderProfile() {
@@ -247,8 +240,8 @@ async function submitMatch() {
   if (error) { showMatchMsg(error.message, 'error'); return; }
 
   var matchCode = data && data[0] && data[0].match_code;
-  alert('✅ Match logged successfully!\n\nMatch code: ' + matchCode + '\n\nKeep this for your reference. Waiting for the other 3 players to confirm.');
-  showMatchMsg('✅ Match logged! Reference code <strong>' + matchCode + '</strong> — keep it for your records. Waiting for the other 3 players to confirm.', 'success');
+  alert('✅ Match logged successfully!\n\nMatch code: ' + matchCode + '\n\nIt\'s already on the leaderboard.');
+  showMatchMsg('✅ Match logged! Reference code <strong>' + matchCode + '</strong> — it\'s already reflected on the leaderboard.', 'success');
   document.getElementById('score-me').value = '';
   for (var j = 1; j <= 3; j++) {
     document.getElementById('player-' + j + '-id').value = '';
@@ -256,55 +249,6 @@ async function submitMatch() {
     document.getElementById('player-' + j + '-hint').textContent = '';
   }
   lookedUpIds = {};
-}
-
-async function loadPendingConfirmations() {
-  var { data } = await vmlClient.rpc('vml_my_pending_confirmations');
-  var rows = data || [];
-  var listEl = document.getElementById('pending-list');
-
-  if (!rows.length) {
-    listEl.innerHTML = '<div class="empty-note">Nothing waiting on you right now.</div>';
-    return;
-  }
-
-  listEl.innerHTML = rows.map(function (r) {
-    return '<div class="pending-item" id="pending-' + r.match_id + '">'
-      + '<div class="top"><span class="cat">' + (r.category === 'traditional' ? '🀄 Traditional' : '🏆 Taiwanese') + '</span><span class="date">' + r.match_date + '</span></div>'
-      + '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Match code: <strong>' + r.match_code + '</strong></div>'
-      + '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Logged by ' + r.creator_name + '</div>'
-      + '<div class="detail-rows" id="detail-' + r.match_id + '"></div>'
-      + '<div class="detail-actions">'
-      + '<button class="btn btn-confirm" onclick="doConfirm(\'' + r.match_id + '\')">✅ Confirm</button>'
-      + '<button class="btn btn-dispute" onclick="doDispute(\'' + r.match_id + '\')">Dispute</button>'
-      + '</div></div>';
-  }).join('');
-
-  rows.forEach(function (r) { loadMatchDetail(r.match_id); });
-}
-
-async function loadMatchDetail(matchId) {
-  var { data } = await vmlClient.rpc('vml_match_detail', { p_match_id: matchId });
-  var rows = data || [];
-  var el = document.getElementById('detail-' + matchId);
-  if (!el) return;
-  el.innerHTML = rows.map(function (p) {
-    var isMe = p.player_id === myProfile.id;
-    return '<div class="detail-row' + (isMe ? ' me' : '') + '"><span>' + p.name + ' (' + p.member_id + ')' + (isMe ? ' — you' : '') + '</span><span>' + p.score + ' pts (' + p.rank_points + (p.confirmed ? ' ✓' : '') + ')</span></div>';
-  }).join('');
-}
-
-async function doConfirm(matchId) {
-  var { error } = await vmlClient.rpc('vml_confirm_match', { p_match_id: matchId });
-  if (error) { alert(error.message); return; }
-  loadPendingConfirmations();
-}
-
-async function doDispute(matchId) {
-  var reason = prompt('Optional: why are you disputing this match?') || null;
-  var { error } = await vmlClient.rpc('vml_reject_match', { p_match_id: matchId, p_reason: reason });
-  if (error) { alert(error.message); return; }
-  loadPendingConfirmations();
 }
 
 async function markRenewalSubmitted() {

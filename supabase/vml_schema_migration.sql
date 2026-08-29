@@ -572,8 +572,11 @@ begin
     exit when not exists (select 1 from vml_matches m where m.match_code = v_match_code);
   end loop;
 
+  -- Auto-confirmed on creation -- the 4 scores already had to sum to the
+  -- exact pool total to get this far, and the club runs on trust between
+  -- members, so there's no separate 3-of-3 confirmation step anymore.
   insert into vml_matches (id, match_code, created_by, category, match_date, status)
-  values (v_match_id, v_match_code, v_uid, p_category, v_match_date, 'pending_confirm');
+  values (v_match_id, v_match_code, v_uid, p_category, v_match_date, 'confirmed');
 
   insert into vml_match_entries (match_id, player_id, score, rank_points)
   select v_match_id, pid, sc,

@@ -28,8 +28,11 @@
  * ---- Wiring ----
  *   Supabase dashboard > Database > Webhooks > add this /exec URL for:
  *     vml_players        -> UPDATE
- *     vml_match_entries  -> INSERT
  *     vml_matches        -> UPDATE
+ *
+ * (Matches auto-confirm on creation now -- no per-player confirmation step --
+ * so the old vml_match_entries -> INSERT webhook is no longer needed. Remove
+ * that trigger from the Supabase dashboard if it's still configured.)
  */
 
 function doPost(e) {
@@ -60,8 +63,6 @@ function handleSupabaseWebhook(body) {
 
   if (table === 'vml_players' && type === 'UPDATE') {
     handlePlayerStatusChange(record, oldRecord);
-  } else if (table === 'vml_match_entries' && type === 'INSERT') {
-    handleMatchEntryInsert(record);
   } else if (table === 'vml_matches' && type === 'UPDATE') {
     handleMatchStatusChange(record, oldRecord);
   }
@@ -115,35 +116,15 @@ function handlePlayerStatusChange(record, oldRecord) {
   }
 }
 
-function handleMatchEntryInsert(record) {
-  if (!record.match_id || !record.player_id) return;
-
-  var match = callSupabaseRest('vml_matches?id=eq.' + record.match_id + '&select=created_by,category,match_date')[0];
-  if (!match) return;
-  if (record.player_id === match.created_by) return; // creator doesn't need to confirm their own match
-
-  var player = callSupabaseRest('vml_players?id=eq.' + record.player_id + '&select=name,email')[0];
-  var creator = callSupabaseRest('vml_players?id=eq.' + match.created_by + '&select=name')[0];
-  if (!player) return;
-
-  safeEmail(player.email,
-    'VML: Confirm your match result',
-    'Hi ' + player.name + ',\n\n' +
-    (creator ? creator.name : 'A teammate') + ' logged a ' + match.category + ' match from ' + match.match_date +
-    ' that includes your score.\n\n' +
-    'Please log in and confirm (or dispute) it: https://vadodaramahjongleague.com/dashboard.html'
-  );
-}
-
 function handleMatchStatusChange(record, oldRecord) {
-  if (oldRecord.status === 'pending_confirm' && record.status === 'rejected') {
+  if (oldRecord.status !== 'rejected' && record.status === 'rejected') {
     var creator = callSupabaseRest('vml_players?id=eq.' + record.created_by + '&select=name,email')[0];
     if (!creator) return;
 
     safeEmail(creator.email,
       'VML: A match you logged was disputed',
       'Hi ' + creator.name + ',\n\n' +
-      'Your ' + record.category + ' match from ' + record.match_date + ' was disputed by a player' +
+      'Your ' + record.category + ' match from ' + record.match_date + ' was disputed' +
       (record.rejected_reason ? (' with this note: "' + record.rejected_reason + '"') : '.') + '\n\n' +
       'You can log it again with corrected scores at https://vadodaramahjongleague.com/dashboard.html'
     );
