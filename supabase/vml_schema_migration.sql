@@ -546,8 +546,8 @@ begin
   end if;
 
   select count(*) into v_active_count
-  from vml_players
-  where id = any(p_player_ids) and status = 'active' and expires_at > now();
+  from vml_players vp
+  where vp.id = any(p_player_ids) and vp.status = 'active' and vp.expires_at > now();
 
   if v_active_count <> 4 then
     raise exception 'All 4 players must be active, non-expired members';
