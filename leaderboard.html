@@ -41,6 +41,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 .podium-base.bronze{background:linear-gradient(135deg,#e67e2233,#d3540022);border:1px solid #e67e2244;height:36px;color:#e67e22;}
 .rank-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;}
 .rank-num{font-size:18px;font-weight:700;color:var(--muted);min-width:28px;text-align:center;}
+.rank-mid{font-size:12px;font-weight:700;color:var(--gold);min-width:34px;text-align:center;}
 .rank-info{flex:1;}
 .rank-name{font-size:14px;font-weight:600;color:var(--text);}
 .rank-id{font-size:11px;color:var(--muted);}
@@ -80,6 +81,17 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/vml-common.js"></script>
 <script>
+function ordinal(n) {
+  var rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return n + 'th';
+  switch (n % 10) {
+    case 1: return n + 'st';
+    case 2: return n + 'nd';
+    case 3: return n + 'rd';
+    default: return n + 'th';
+  }
+}
+
 window.addEventListener('DOMContentLoaded', function () { loadLeaderboard(); });
 
 async function loadLeaderboard() {
@@ -98,8 +110,12 @@ async function loadLeaderboard() {
       return;
     }
 
-    var top3 = rows.slice(0, 3);
-    var rest = rows.slice(3);
+    // Same placeholder-until-real-ranking behavior as the home page: the
+    // top-3 stage only means something once someone has a real confirmed
+    // match, otherwise everyone's tied on the same welcome bonus.
+    var hasRealRanking = rows.some(function (p) { return p.games > 0; });
+    var top3 = hasRealRanking ? rows.slice(0, 3) : [];
+    var rest = hasRealRanking ? rows.slice(3) : rows;
     var podiumOrder = [1, 0, 2];
     var posStyles = [
       { cls: 'silver', crown: '🥈', base: 'silver', label: '2nd' },
@@ -107,34 +123,42 @@ async function loadLeaderboard() {
       { cls: 'bronze', crown: '🥉', base: 'bronze', label: '3rd' }
     ];
     var podiumHtml = '<div class="podium">';
-    podiumOrder.forEach(function (playerIdx, posIdx) {
-      var p = top3[playerIdx];
-      var style = posStyles[posIdx];
-      if (!p) {
-        podiumHtml += '<div class="podium-item"><div class="podium-base ' + style.base + '">' + style.label + '</div></div>';
-        return;
-      }
-      var played = p.games > 0;
-      var initials = played ? p.name.split(' ').map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase() : '–';
-      podiumHtml += '<div class="podium-item">'
-        + '<div class="podium-crown">' + style.crown + '</div>'
-        + '<div class="podium-avatar ' + style.cls + '">' + initials + '</div>'
-        + '<div class="podium-name">' + (played ? p.name : '') + '</div>'
-        + '<div class="podium-id">' + (played ? p.member_id : '') + '</div>'
-        + '<div class="podium-points">' + p.points + ' pts</div>'
-        + '<div class="podium-base ' + style.base + '">' + style.label + '</div>'
-        + '</div>';
-    });
+    if (!hasRealRanking) {
+      posStyles.forEach(function (style) {
+        podiumHtml += '<div class="podium-item"><div class="podium-base ' + style.base + '">' + style.label.charAt(0) + '</div></div>';
+      });
+    } else {
+      podiumOrder.forEach(function (playerIdx, posIdx) {
+        var p = top3[playerIdx];
+        var style = posStyles[posIdx];
+        if (!p) {
+          podiumHtml += '<div class="podium-item"><div class="podium-base ' + style.base + '">' + style.label + '</div></div>';
+          return;
+        }
+        var initials = p.name.split(' ').map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+        podiumHtml += '<div class="podium-item">'
+          + '<div class="podium-crown">' + style.crown + '</div>'
+          + '<div class="podium-avatar ' + style.cls + '">' + initials + '</div>'
+          + '<div class="podium-name">' + p.name + '</div>'
+          + '<div class="podium-id">' + (p.member_id || '') + '</div>'
+          + '<div class="podium-points">' + (p.points != null ? p.points + ' pts' : '') + '</div>'
+          + '<div class="podium-base ' + style.base + '">' + style.label + '</div>'
+          + '</div>';
+      });
+    }
     podiumHtml += '</div>';
     document.getElementById('podium-section').innerHTML = podiumHtml;
 
     if (rest.length) {
-      document.getElementById('rest-label').style.display = 'block';
-      document.getElementById('rest-section').innerHTML = rest.map(function (p, i) {
+      document.getElementById('rest-label').style.display = hasRealRanking ? 'block' : 'none';
+      var rankCounter = 4;
+      document.getElementById('rest-section').innerHTML = rest.map(function (p) {
+        var ranked = p.points != null && p.points > 1000;
+        var rankLabel = ranked ? ordinal(rankCounter++) : '';
         return '<div class="rank-card">'
-          + '<div class="rank-num">' + (i + 4) + '</div>'
-          + '<div class="rank-info"><div class="rank-name">' + (p.games > 0 ? p.name : '') + '</div><div class="rank-id">' + (p.games > 0 ? p.member_id : '') + '</div></div>'
-          + '<div><div class="rank-points">' + p.points + '</div><div class="rank-pts-label">pts</div></div>'
+          + '<div class="rank-info"><div class="rank-name">' + p.name + '</div><div class="rank-id">' + (p.member_id || '') + '</div></div>'
+          + '<div class="rank-mid">' + rankLabel + '</div>'
+          + '<div><div class="rank-points">' + (p.points != null ? p.points : '') + '</div><div class="rank-pts-label">' + (p.points != null ? 'pts' : '') + '</div></div>'
           + '</div>';
       }).join('');
     } else {
