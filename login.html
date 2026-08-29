@@ -80,7 +80,14 @@ function routeAfterLogin(profile) {
     window.location.href='register.html';
   } else if (profile.status === 'pending_approval' || profile.status === 'rejected') {
     window.location.href='register.html';
+  } else if (profile.member_id) {
+    // Real playing member (even if also an admin, e.g. Avani/A001) --
+    // dashboard.html is where matches get logged/confirmed, and it already
+    // shows an "Admin" link for admins to jump to admin.html from there.
+    window.location.href='dashboard.html';
   } else if (profile.is_admin) {
+    // Admin-only utility account with no member_id (e.g. AnyApps.in) --
+    // has nothing to do on the member dashboard.
     window.location.href='admin.html';
   } else {
     window.location.href='dashboard.html';
