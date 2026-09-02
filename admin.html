@@ -194,8 +194,16 @@ async function loadDisputed() {
     return '<div class="reg-item">'
       + '<div class="reg-info"><div class="name">' + (r.category === 'traditional' ? '🀄 Traditional' : '🏆 Taiwanese') + ' — ' + r.match_date + ' (code: ' + r.match_code + ')</div>'
       + '<div class="meta">Logged by ' + r.creator_name + (r.rejected_reason ? (' · "' + r.rejected_reason + '"') : '') + '</div></div>'
+      + '<button class="btn-sm" style="background:var(--surface);color:var(--text);border:1px solid var(--border);" onclick="dismissDispute(\'' + r.match_id + '\')">Dismiss</button>'
       + '</div>';
   }).join('');
+}
+
+async function dismissDispute(matchId) {
+  if (!confirm('Dismiss this dispute? This just clears it from your list once it\'s been sorted out -- it does not affect the leaderboard.')) return;
+  var { error } = await vmlClient.rpc('vml_admin_dismiss_dispute', { p_match_id: matchId });
+  if (error) { alert(error.message); return; }
+  loadDisputed();
 }
 
 var searchTimer = null;

@@ -250,6 +250,16 @@ function handleButtonReply(from, buttonId) {
   }
 
   if (action === 'reject') {
+    // Don't dispute on the first tap -- easy to hit by mistake, and it
+    // can't be undone once submitted. Ask once more before it's final.
+    waSendButtons(from, "⚠️ Are you sure you want to dispute this match? This can't be undone.", [
+      { id: 'rejectyes:' + matchId, title: '❌ Yes, dispute' },
+      { id: 'rejectno:' + matchId, title: 'Cancel' }
+    ]);
+    return;
+  }
+
+  if (action === 'rejectyes') {
     try {
       callSupabaseRpc('vml_bot_reject_match', { p_match_id: matchId, p_mobile: from, p_reason: null });
       waSendText(from, "You've disputed this match. The player who logged it has been notified.");
@@ -257,6 +267,11 @@ function handleButtonReply(from, buttonId) {
     } catch (err) {
       waSendText(from, '⚠️ ' + err.message);
     }
+    return;
+  }
+
+  if (action === 'rejectno') {
+    waSendText(from, "Okay, not disputed.");
     return;
   }
 }

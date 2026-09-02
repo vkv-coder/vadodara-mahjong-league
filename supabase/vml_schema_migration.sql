@@ -859,7 +859,14 @@ $$;
 revoke all on function public.vml_admin_member_list(text) from public;
 grant execute on function public.vml_admin_member_list(text) to authenticated;
 
--- Admin-only: matches under dispute, for visibility.
+-- A dismissed dispute stays 'rejected' (nothing about the match itself
+-- changes -- the creator still has to re-log it if they want it on the
+-- leaderboard) but drops off the admin's active list once she's satisfied
+-- it's been sorted out between the players.
+alter table public.vml_matches add column if not exists dismissed_at timestamptz;
+
+-- Admin-only: matches under dispute, for visibility. Dismissed ones are
+-- excluded -- they're resolved, not undone.
 drop function if exists public.vml_admin_rejected_matches();
 
 create or replace function public.vml_admin_rejected_matches()
@@ -878,13 +885,40 @@ begin
   select m.id, m.match_code, m.category, m.match_date, p.name, m.rejected_reason, m.created_at
   from vml_matches m
   join vml_players p on p.id = m.created_by
-  where m.status = 'rejected'
+  where m.status = 'rejected' and m.dismissed_at is null
   order by m.created_at desc;
 end;
 $$;
 
 revoke all on function public.vml_admin_rejected_matches() from public;
 grant execute on function public.vml_admin_rejected_matches() to authenticated;
+
+-- Admin-only: clear a disputed match off the active list once it's been
+-- sorted out (players talked it out, creator re-logged corrected scores,
+-- etc). Does not touch the match's own status or the leaderboard -- purely
+-- a bookkeeping flag, since force-confirming a match a player explicitly
+-- disputed would undermine the whole point of requiring their confirmation.
+create or replace function public.vml_admin_dismiss_dispute(p_match_id uuid) returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not coalesce((select vp.is_admin from vml_players vp where vp.id = auth.uid()), false) then
+    raise exception 'Admin access required';
+  end if;
+
+  update vml_matches set dismissed_at = now()
+  where id = p_match_id and status = 'rejected';
+
+  if not found then
+    raise exception 'Match not found or not currently disputed';
+  end if;
+end;
+$$;
+
+revoke all on function public.vml_admin_dismiss_dispute(uuid) from public;
+grant execute on function public.vml_admin_dismiss_dispute(uuid) to authenticated;
 
 -- ============================================================================
 -- Backfill: renumber every existing member (approved under the old
