@@ -46,6 +46,7 @@
 
 var STATE_CATEGORY = 'awaiting_category';
 var STATE_SCORES = 'awaiting_scores';
+var STATE_CONFIRM = 'awaiting_final_confirm';
 var SESSION_EXPIRY_MINUTES = 30;
 
 // ---------------------------------------------------------------------------
@@ -125,7 +126,7 @@ function startNewMatchFlow(from) {
     waSendText(from, "This WhatsApp number isn't a recognized active VML member. Contact avanipatel0701@gmail.com if this seems wrong.");
     return;
   }
-  upsertSession(from, STATE_CATEGORY, { my_member_id: member.member_id });
+  upsertSession(from, STATE_CATEGORY, { my_member_id: member.member_id, my_name: member.name });
   waSendButtons(from, 'Logging a new match. What category did you play?', [
     { id: 'cat_traditional', title: '🀄 Traditional' },
     { id: 'cat_taiwanese', title: '🏆 Taiwanese' }
@@ -164,9 +165,50 @@ function advanceMatchFlow(from, session, text) {
       return;
     }
     var others = pairs.filter(function (p) { return p.id !== draft.my_member_id; });
-    finalizeMatch(from, draft.category, mine[0].score, others);
+    previewMatch(from, draft, mine[0].score, others);
     return;
   }
+}
+
+// Looks up each typed ID's real name before anything is submitted, so a
+// typo (wrong-but-valid ID) shows up as an unexpected name here instead of
+// silently logging a match against the wrong person.
+function previewMatch(from, draft, myScore, others) {
+  var resolvedOthers = [];
+  for (var i = 0; i < others.length; i++) {
+    var member = callSupabaseRpc('vml_bot_lookup_by_id', { p_member_id: others[i].id })[0];
+    if (!member) {
+      waSendText(from, 'Member ID ' + others[i].id + " isn't a recognized active member. " + SCORES_PROMPT);
+      return;
+    }
+    resolvedOthers.push({ id: others[i].id, name: member.name, score: others[i].score });
+  }
+
+  upsertSession(from, STATE_CONFIRM, {
+    category: draft.category,
+    my_member_id: draft.my_member_id,
+    my_name: draft.my_name,
+    my_score: myScore,
+    others: resolvedOthers
+  });
+
+  var lines = [draft.my_member_id + ' - ' + draft.my_name + ' - ' + myScore + ' (you)']
+    .concat(resolvedOthers.map(function (p) { return p.id + ' - ' + p.name + ' - ' + p.score; }));
+
+  waSendButtons(from, 'Please confirm this is correct:\n' + lines.join('\n'), [
+    { id: 'submitmatch', title: '✅ Yes, submit' },
+    { id: 'redoscores', title: '✏️ Re-enter' }
+  ]);
+}
+
+function submitConfirmedMatch(from) {
+  var session = getSession(from);
+  if (!session || session.state !== STATE_CONFIRM || sessionExpired(session)) {
+    waSendText(from, 'That confirmation has expired -- send any message to start logging a match again.');
+    return;
+  }
+  var draft = session.draft;
+  finalizeMatch(from, draft.category, draft.my_score, draft.others);
 }
 
 // Accepts one "ID score" pair per line, or comma-separated on one line.
@@ -235,6 +277,27 @@ function handleButtonReply(from, buttonId) {
   var parts = buttonId.split(':');
   var action = parts[0];
   var matchId = parts[1];
+
+  if (action === 'cat_traditional' || action === 'cat_taiwanese') {
+    var catSession = getSession(from);
+    if (!catSession || sessionExpired(catSession)) { startNewMatchFlow(from); return; }
+    advanceMatchFlow(from, catSession, action === 'cat_traditional' ? 'traditional' : 'taiwanese');
+    return;
+  }
+
+  if (action === 'submitmatch') {
+    submitConfirmedMatch(from);
+    return;
+  }
+
+  if (action === 'redoscores') {
+    var redoSession = getSession(from);
+    var redoDraft = (redoSession && redoSession.draft) || {};
+    upsertSession(from, STATE_SCORES, { category: redoDraft.category, my_member_id: redoDraft.my_member_id, my_name: redoDraft.my_name });
+    waSendText(from, SCORES_PROMPT);
+    return;
+  }
+
   if (!matchId) return;
 
   if (action === 'confirm') {
