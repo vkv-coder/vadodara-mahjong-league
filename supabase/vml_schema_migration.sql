@@ -503,6 +503,10 @@ grant execute on function public.vml_admin_delete_player(uuid) to authenticated;
 -- the old signature must be dropped first (see postgres_rls_gotchas #9).
 drop function if exists public.vml_create_match(uuid[],integer[],text,date);
 
+-- VML001, VML002, ... -- 3-digit padded like the member IDs, no cap on
+-- overflow (lpad just stops padding past 999, e.g. VML1000).
+create sequence if not exists public.vml_match_seq start 1;
+
 create or replace function public.vml_create_match(
   p_player_ids uuid[], p_scores integer[], p_category text, p_match_date date default current_date
 ) returns table(id uuid, match_code text)
@@ -514,12 +518,10 @@ declare
   v_uid uuid := auth.uid();
   v_match_id uuid;
   v_match_code text;
-  v_code_chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; -- no 0/O/1/I, easy to misread aloud
   v_pool_total integer;
   v_sum integer;
   v_active_count integer;
   v_match_date date := coalesce(p_match_date, current_date);
-  i integer;
 begin
   if v_uid is null then
     raise exception 'Must be signed in';
@@ -560,17 +562,7 @@ begin
   end if;
 
   v_match_id := extensions.gen_random_uuid();
-
-  -- Short human-readable reference code (e.g. Z567C), independent of the
-  -- internal uuid -- generated here, not left to the client, and retried
-  -- on the astronomically rare collision against the unique index.
-  loop
-    v_match_code := '';
-    for i in 1..5 loop
-      v_match_code := v_match_code || substr(v_code_chars, 1 + floor(random() * length(v_code_chars))::int, 1);
-    end loop;
-    exit when not exists (select 1 from vml_matches m where m.match_code = v_match_code);
-  end loop;
+  v_match_code := 'VML' || lpad(nextval('public.vml_match_seq')::text, 3, '0');
 
   -- Auto-confirmed on creation -- the 4 scores already had to sum to the
   -- exact pool total to get this far, and the club runs on trust between
@@ -1028,11 +1020,9 @@ declare
   v_all_ids uuid[];
   v_match_id uuid;
   v_match_code text;
-  v_code_chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   v_pool_total integer;
   v_sum integer;
   v_match_date date := coalesce(p_match_date, current_date);
-  i integer;
 begin
   if p_category not in ('traditional','taiwanese') then
     raise exception 'Invalid category %', p_category;
@@ -1078,13 +1068,7 @@ begin
   end if;
 
   v_match_id := extensions.gen_random_uuid();
-  loop
-    v_match_code := '';
-    for i in 1..5 loop
-      v_match_code := v_match_code || substr(v_code_chars, 1 + floor(random() * length(v_code_chars))::int, 1);
-    end loop;
-    exit when not exists (select 1 from vml_matches m where m.match_code = v_match_code);
-  end loop;
+  v_match_code := 'VML' || lpad(nextval('public.vml_match_seq')::text, 3, '0');
 
   insert into vml_matches (id, match_code, created_by, category, match_date, status)
   values (v_match_id, v_match_code, v_creator_id, p_category, v_match_date, 'pending_confirm');

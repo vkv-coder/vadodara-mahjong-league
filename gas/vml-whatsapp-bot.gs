@@ -45,13 +45,7 @@
  */
 
 var STATE_CATEGORY = 'awaiting_category';
-var STATE_MY_SCORE = 'awaiting_my_score';
-var STATE_P2_ID = 'awaiting_p2_id';
-var STATE_P2_SCORE = 'awaiting_p2_score';
-var STATE_P3_ID = 'awaiting_p3_id';
-var STATE_P3_SCORE = 'awaiting_p3_score';
-var STATE_P4_ID = 'awaiting_p4_id';
-var STATE_P4_SCORE = 'awaiting_p4_score';
+var STATE_SCORES = 'awaiting_scores';
 var SESSION_EXPIRY_MINUTES = 30;
 
 // ---------------------------------------------------------------------------
@@ -123,13 +117,15 @@ function handleIncomingMessage(message) {
 // Match-logging conversation (creator side)
 // ---------------------------------------------------------------------------
 
+var SCORES_PROMPT = "Now send all 4 players' Member ID and score, one per line, including your own -- e.g.:\nA001 1005\nA007 398\nA025 390\nA008 247";
+
 function startNewMatchFlow(from) {
   var member = callSupabaseRpc('vml_bot_lookup_by_mobile', { p_mobile: from })[0];
   if (!member) {
     waSendText(from, "This WhatsApp number isn't a recognized active VML member. Contact avanipatel0701@gmail.com if this seems wrong.");
     return;
   }
-  upsertSession(from, STATE_CATEGORY, {});
+  upsertSession(from, STATE_CATEGORY, { my_member_id: member.member_id });
   waSendButtons(from, 'Logging a new match. What category did you play?', [
     { id: 'cat_traditional', title: '🀄 Traditional' },
     { id: 'cat_taiwanese', title: '🏆 Taiwanese' }
@@ -151,76 +147,51 @@ function advanceMatchFlow(from, session, text) {
       return;
     }
     draft.category = category;
-    upsertSession(from, STATE_MY_SCORE, draft);
-    waSendText(from, 'What was YOUR score?');
+    upsertSession(from, STATE_SCORES, draft);
+    waSendText(from, SCORES_PROMPT);
     return;
   }
 
-  if (session.state === STATE_MY_SCORE) {
-    var myScore = parseInt(text, 10);
-    if (isNaN(myScore)) { waSendText(from, 'Please send just a number for your score.'); return; }
-    draft.my_score = myScore;
-    upsertSession(from, STATE_P2_ID, draft);
-    waSendText(from, "Player 2's Member ID? (e.g. A001)");
-    return;
-  }
-
-  if (session.state === STATE_P2_ID) {
-    draft.p2_id = text.toUpperCase();
-    upsertSession(from, STATE_P2_SCORE, draft);
-    waSendText(from, "Player 2's score?");
-    return;
-  }
-
-  if (session.state === STATE_P2_SCORE) {
-    var s2 = parseInt(text, 10);
-    if (isNaN(s2)) { waSendText(from, 'Please send just a number for the score.'); return; }
-    draft.p2_score = s2;
-    upsertSession(from, STATE_P3_ID, draft);
-    waSendText(from, "Player 3's Member ID?");
-    return;
-  }
-
-  if (session.state === STATE_P3_ID) {
-    draft.p3_id = text.toUpperCase();
-    upsertSession(from, STATE_P3_SCORE, draft);
-    waSendText(from, "Player 3's score?");
-    return;
-  }
-
-  if (session.state === STATE_P3_SCORE) {
-    var s3 = parseInt(text, 10);
-    if (isNaN(s3)) { waSendText(from, 'Please send just a number for the score.'); return; }
-    draft.p3_score = s3;
-    upsertSession(from, STATE_P4_ID, draft);
-    waSendText(from, "Player 4's Member ID?");
-    return;
-  }
-
-  if (session.state === STATE_P4_ID) {
-    draft.p4_id = text.toUpperCase();
-    upsertSession(from, STATE_P4_SCORE, draft);
-    waSendText(from, "Player 4's score?");
-    return;
-  }
-
-  if (session.state === STATE_P4_SCORE) {
-    var s4 = parseInt(text, 10);
-    if (isNaN(s4)) { waSendText(from, 'Please send just a number for the score.'); return; }
-    draft.p4_score = s4;
-    finalizeMatch(from, draft);
+  if (session.state === STATE_SCORES) {
+    var pairs = parseScoreLines(text);
+    if (!pairs) {
+      waSendText(from, "Couldn't read that. " + SCORES_PROMPT);
+      return;
+    }
+    var mine = pairs.filter(function (p) { return p.id === draft.my_member_id; });
+    if (mine.length !== 1) {
+      waSendText(from, 'Include your own ID (' + draft.my_member_id + ') exactly once, with your own score. ' + SCORES_PROMPT);
+      return;
+    }
+    var others = pairs.filter(function (p) { return p.id !== draft.my_member_id; });
+    finalizeMatch(from, draft.category, mine[0].score, others);
     return;
   }
 }
 
-function finalizeMatch(from, draft) {
+// Accepts one "ID score" pair per line, or comma-separated on one line.
+function parseScoreLines(text) {
+  var raw = text.replace(/\r/g, '');
+  var chunks = raw.indexOf('\n') >= 0 ? raw.split('\n') : raw.split(',');
+  var pairs = [];
+  for (var i = 0; i < chunks.length; i++) {
+    var chunk = chunks[i].trim();
+    if (!chunk) continue;
+    var m = chunk.match(/^([A-Za-z]\d{1,4})[\s,:-]+(\d+)$/);
+    if (!m) return null;
+    pairs.push({ id: m[1].toUpperCase(), score: parseInt(m[2], 10) });
+  }
+  return pairs.length === 4 ? pairs : null;
+}
+
+function finalizeMatch(from, category, myScore, others) {
   var rows;
   try {
     rows = callSupabaseRpc('vml_bot_create_match', {
       p_creator_mobile: from,
-      p_member_ids: [draft.p2_id, draft.p3_id, draft.p4_id],
-      p_scores: [draft.my_score, draft.p2_score, draft.p3_score, draft.p4_score],
-      p_category: draft.category
+      p_member_ids: [others[0].id, others[1].id, others[2].id],
+      p_scores: [myScore, others[0].score, others[1].score, others[2].score],
+      p_category: category
     });
   } catch (err) {
     deleteSession(from);

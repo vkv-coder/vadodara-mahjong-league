@@ -66,6 +66,11 @@ grant execute on function public.vml_bot_lookup_by_id(text) to service_role;
 --
 -- p_member_ids must be exactly the OTHER 3 players' member IDs, in the same
 -- order as p_scores[2..4]; p_scores[1] is the creator's own score.
+--
+-- Shares vml_match_seq with the web app's vml_create_match, so codes stay
+-- globally unique across both entry points with no collision-retry needed.
+create sequence if not exists public.vml_match_seq start 1;
+
 create or replace function public.vml_bot_create_match(
   p_creator_mobile text, p_member_ids text[], p_scores integer[],
   p_category text, p_match_date date default current_date
@@ -83,11 +88,9 @@ declare
   v_all_ids uuid[];
   v_match_id uuid;
   v_match_code text;
-  v_code_chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   v_pool_total integer;
   v_sum integer;
   v_match_date date := coalesce(p_match_date, current_date);
-  i integer;
 begin
   if p_category not in ('traditional','taiwanese') then
     raise exception 'Invalid category %', p_category;
@@ -133,13 +136,7 @@ begin
   end if;
 
   v_match_id := extensions.gen_random_uuid();
-  loop
-    v_match_code := '';
-    for i in 1..5 loop
-      v_match_code := v_match_code || substr(v_code_chars, 1 + floor(random() * length(v_code_chars))::int, 1);
-    end loop;
-    exit when not exists (select 1 from vml_matches m where m.match_code = v_match_code);
-  end loop;
+  v_match_code := 'VML' || lpad(nextval('public.vml_match_seq')::text, 3, '0');
 
   insert into vml_matches (id, match_code, created_by, category, match_date, status)
   values (v_match_id, v_match_code, v_creator_id, p_category, v_match_date, 'pending_confirm');
