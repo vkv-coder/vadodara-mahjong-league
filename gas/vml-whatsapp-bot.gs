@@ -302,7 +302,7 @@ function handleButtonReply(from, buttonId) {
 
   if (action === 'confirm') {
     try {
-      var justCompleted = callSupabaseRpc('vml_bot_confirm_match', { p_match_id: matchId, p_mobile: from })[0];
+      var justCompleted = callSupabaseRpc('vml_bot_confirm_match', { p_match_id: matchId, p_mobile: from });
       waSendText(from, justCompleted
         ? '✅ Confirmed! All 3 players have now confirmed -- this match is live on the leaderboard.'
         : "✅ Thanks, you've confirmed this match. Waiting on the remaining player(s).");
@@ -410,6 +410,10 @@ function callSupabaseRest(pathAndQuery) {
   try { return JSON.parse(res.getContentText()); } catch (e) { return []; }
 }
 
+// Handles all three PostgREST RPC response shapes: an array of rows (SETOF/
+// TABLE functions), a raw scalar (boolean-returning functions -- do NOT
+// index [0] on those), and an empty body (void-returning functions -- 204
+// No Content, which JSON.parse('') would otherwise throw on).
 function callSupabaseRpc(fnName, payload) {
   var props = PropertiesService.getScriptProperties();
   var url = props.getProperty('SUPABASE_URL') + '/rest/v1/rpc/' + fnName;
@@ -422,9 +426,10 @@ function callSupabaseRpc(fnName, payload) {
     muteHttpExceptions: true
   });
   var status = res.getResponseCode();
-  var body = JSON.parse(res.getContentText());
+  var text = res.getContentText();
+  var body = text ? JSON.parse(text) : null;
   if (status >= 400) {
-    throw new Error(body.message || 'Something went wrong, please try again.');
+    throw new Error((body && body.message) || 'Something went wrong, please try again.');
   }
   return body;
 }
