@@ -24,7 +24,11 @@
  *   TELEGRAM_BOT_TOKEN            from @BotFather
  *   ADMIN_CHAT_ID                 your own Telegram chat id -- bot-crash
  *                                 alerts only, not a club contact
+ *   ADMIN_NOTIFY_SECRET           any string you pick -- gates the doGet
+ *                                 ?action=lowSlots admin-notify endpoint
+ *                                 admin.html's attendance feature calls
  *
+
  * ---- Wiring (no Meta-style verification handshake needed) ----
  * After deploying, register the webhook by opening this URL once in any
  * browser (fill in your real token and the /exec URL from the deploy step):
@@ -49,7 +53,25 @@ var SESSION_EXPIRY_MINUTES = 30;
 // Telegram webhook entry points
 // ---------------------------------------------------------------------------
 
+// Doubles as a one-way admin notify endpoint for the low-slots alert from
+// admin.html's attendance feature (?action=lowSlots&secret=...&name=...
+// &mobile=...&remaining=...). Gated on ADMIN_NOTIFY_SECRET, a value separate
+// from TELEGRAM_BOT_TOKEN, so admin.html's client-side JS never has to embed
+// the real bot token -- worst case a leaked notify secret only lets someone
+// send fake "member is low on slots" pings to Avani's own Telegram, nothing
+// that touches member data or the bot's ability to act.
 function doGet(e) {
+  var p = (e && e.parameter) || {};
+  if (p.action === 'lowSlots') {
+    var cfg = getConfig();
+    var secret = PropertiesService.getScriptProperties().getProperty('ADMIN_NOTIFY_SECRET');
+    if (!secret || p.secret !== secret) {
+      return ContentService.createTextOutput('Forbidden');
+    }
+    var text = '⚠️ ' + (p.name || 'A member') + ' (' + (p.mobile || '?') + ') has ' + (p.remaining || '?') + ' slot(s) left.';
+    if (cfg.ADMIN_CHAT_ID) directSend(cfg.TELEGRAM_BOT_TOKEN, cfg.ADMIN_CHAT_ID, text);
+    return ContentService.createTextOutput('ok');
+  }
   return ContentService.createTextOutput('VML Telegram bot is live.');
 }
 

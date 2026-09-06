@@ -72,7 +72,7 @@ td{padding:6px 4px;border-bottom:1px solid var(--surface);}
     </div>
     <input type="text" id="member-search" placeholder="Search by name, member ID, or mobile" oninput="debouncedSearch()">
     <table>
-      <thead><tr><th>Member ID</th><th>Name</th><th>Mobile</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Member ID</th><th>Name</th><th>Mobile</th><th>Status</th><th>Slots</th><th>Actions</th></tr></thead>
       <tbody id="member-rows"></tbody>
     </table>
   </div>
@@ -85,6 +85,27 @@ td{padding:6px 4px;border-bottom:1px solid var(--surface);}
 <script src="js/vml-common.js"></script>
 <script>
 var myAdminId = null;
+
+// Low-slots alert (fires when marking attendance drops a member to <=2
+// remaining) pings Avani's own Telegram via the already-deployed bot's Apps
+// Script -- never touches members' Telegram, just a one-way admin notice she
+// then relays over WhatsApp herself. ADMIN_NOTIFY_SECRET is a separate value
+// from the real Telegram bot token (set as its own Script Property on the
+// Apps Script project) so this page never has to embed the actual bot token.
+var TELEGRAM_NOTIFY_URL = 'https://script.google.com/macros/s/AKfycbylcpsqA5sfL2yhJTFd2zg3whgu3qAJk2VFA0VvpRfVufpMDo20MPaI8Lfut8fw75xp/exec';
+var TELEGRAM_NOTIFY_SECRET = 'vkv201';
+
+function notifyLowSlots(name, mobile, remaining) {
+  if (!TELEGRAM_NOTIFY_URL || TELEGRAM_NOTIFY_URL.indexOf('PASTE_') === 0) return;
+  var url = TELEGRAM_NOTIFY_URL
+    + '?action=lowSlots&secret=' + encodeURIComponent(TELEGRAM_NOTIFY_SECRET)
+    + '&name=' + encodeURIComponent(name)
+    + '&mobile=' + encodeURIComponent(mobile)
+    + '&remaining=' + encodeURIComponent(remaining);
+  // Fire-and-forget -- a failed ping here shouldn't block the attendance
+  // marking that already succeeded.
+  fetch(url).catch(function () {});
+}
 
 window.addEventListener('DOMContentLoaded', async function () {
   var { data: { session } } = await vmlClient.auth.getSession();
@@ -246,8 +267,43 @@ async function loadMembers() {
     }
     actions += '</div>';
 
-    return '<tr><td>' + (r.member_id || '-') + '</td><td>' + r.name + '</td><td>' + r.mobile + '</td><td class="' + statusClass + '">' + statusLabel + '</td><td>' + actions + '</td></tr>';
+    var safeName = r.name.replace(/'/g, "\\'");
+    var slotsCell;
+    if (r.slots_total === null || r.slots_total === undefined) {
+      slotsCell = '<button class="btn-xs" style="background:var(--surface);color:var(--text);border:1px solid var(--border);" onclick="setSlots(\'' + r.id + '\',\'' + safeName + '\',null)">Set package</button>';
+    } else {
+      var lowClass = r.slots_remaining <= 2 ? ' style="color:var(--red);font-weight:600;"' : '';
+      slotsCell = '<span' + lowClass + '>' + r.slots_remaining + ' / ' + r.slots_total + '</span>'
+        + '<div class="row-actions" style="margin-top:4px;">'
+        + '<button class="btn-xs" style="background:#E3F5E8;color:#1E7A46;" onclick="markAttendance(\'' + r.id + '\',\'' + safeName + '\',\'' + r.mobile + '\')">Mark Present</button>'
+        + '<button class="btn-xs" style="background:var(--surface);color:var(--text);border:1px solid var(--border);" onclick="setSlots(\'' + r.id + '\',\'' + safeName + '\',' + r.slots_total + ')">Top up</button>'
+        + '</div>';
+    }
+
+    return '<tr><td>' + (r.member_id || '-') + '</td><td>' + r.name + '</td><td>' + r.mobile + '</td><td class="' + statusClass + '">' + statusLabel + '</td><td>' + slotsCell + '</td><td>' + actions + '</td></tr>';
   }).join('');
+}
+
+async function setSlots(id, name, currentTotal) {
+  var input = prompt('Slot package size for ' + name + (currentTotal ? ' (currently ' + currentTotal + ')' : '') + ':', currentTotal || 20);
+  if (input === null) return;
+  var n = parseInt(input, 10);
+  if (isNaN(n) || n < 0) { alert('Enter a whole number, 0 or more.'); return; }
+  var { error } = await vmlClient.rpc('vml_admin_set_slots', { p_player_id: id, p_slots_total: n });
+  if (error) { alert(error.message); return; }
+  loadMembers();
+}
+
+async function markAttendance(id, name, mobile) {
+  if (!confirm('Mark ' + name + ' present today?')) return;
+  var { data, error } = await vmlClient.rpc('vml_admin_mark_attendance', { p_player_id: id });
+  if (error) { alert(error.message); return; }
+  var row = data && data[0];
+  loadMembers();
+  if (row && row.slots_remaining <= 2) {
+    notifyLowSlots(name, mobile, row.slots_remaining);
+    alert(name + ' marked present. Only ' + row.slots_remaining + ' slot(s) left -- an alert was sent to your Telegram so you can follow up on WhatsApp.');
+  }
 }
 
 // Plain CSV (opens directly in Excel/Google Sheets) -- no library needed,
@@ -259,7 +315,7 @@ function csvCell(v) {
 }
 
 function downloadMembersCsv() {
-  var header = ['Member ID', 'Name', 'Mobile', 'Email', 'Status', 'Expires At', 'Admin'];
+  var header = ['Member ID', 'Name', 'Mobile', 'Email', 'Status', 'Expires At', 'Admin', 'Slots Remaining', 'Slots Total'];
   var lines = [header.map(csvCell).join(',')];
   lastMemberRows.forEach(function (r) {
     lines.push([
@@ -269,7 +325,9 @@ function downloadMembersCsv() {
       r.email,
       r.status,
       r.expires_at ? new Date(r.expires_at).toLocaleDateString('en-IN') : '',
-      r.is_admin ? 'Yes' : ''
+      r.is_admin ? 'Yes' : '',
+      r.slots_total === null || r.slots_total === undefined ? '' : r.slots_remaining,
+      r.slots_total === null || r.slots_total === undefined ? '' : r.slots_total
     ].map(csvCell).join(','));
   });
 
