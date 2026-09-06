@@ -37,8 +37,14 @@ as $$
 declare
   v_id uuid;
 begin
-  select id into v_id from vml_players
-  where mobile = p_mobile and status = 'active' and expires_at > now() and member_id is not null;
+  -- Table aliased and every column qualified (vp.mobile, vp.member_id, ...)
+  -- because RETURNS TABLE(member_id text, name text) below implicitly
+  -- declares "member_id"/"name" as PL/pgSQL variables in this function's
+  -- scope -- an unqualified "member_id is not null" here would collide
+  -- with that variable, not the table column. See postgres_rls_gotchas #10
+  -- (this is the third time this exact bug has hit this project).
+  select vp.id into v_id from vml_players vp
+  where vp.mobile = p_mobile and vp.status = 'active' and vp.expires_at > now() and vp.member_id is not null;
   if v_id is null then
     raise exception 'No active VML member found with that mobile number';
   end if;

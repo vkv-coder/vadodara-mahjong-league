@@ -162,10 +162,10 @@ function linkViaMobile(chatId, rawMobile, viaContactShare) {
     var result = callSupabaseRpc('vml_bot_link_telegram', { p_mobile: mobile, p_telegram_id: String(chatId) })[0];
     tgSend(chatId, 'Linked successfully! Welcome ' + result.name + ' (' + result.member_id + ').\nSend any message to log a new match.', { remove_keyboard: true });
   } catch (err) {
-    var hint = viaContactShare
-      ? "That number isn't a recognized active VML member. If you registered with a different number, just type it here instead."
-      : "That number isn't a recognized active VML member. Please check and re-send.";
-    tgSendText(chatId, '⚠️ ' + hint + ' Contact avanipatel0701@gmail.com if this seems wrong.');
+    // Surfaces the real error (bad Supabase key, RPC/network failure, etc.)
+    // instead of always showing a fixed "not recognized" message -- that
+    // fixed text was hiding genuine failures during initial bot setup.
+    tgSendText(chatId, '⚠️ ' + err.message + ' (mobile tried: ' + mobile + ') Contact avanipatel0701@gmail.com if this seems wrong.');
   }
 }
 
