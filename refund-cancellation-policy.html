@@ -21,6 +21,11 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 .card p, .card li{color:var(--muted);}
 .updated{font-size:12px;color:var(--muted);margin-bottom:18px;}
 </style>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));
+}
+</script>
 </head>
 <body>
 

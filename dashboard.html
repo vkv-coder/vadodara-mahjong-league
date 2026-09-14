@@ -49,6 +49,11 @@ input,select{width:100%;background:var(--surface);border:1px solid var(--border)
 .btn-dispute{background:transparent;border:1px solid var(--red);color:var(--red);}
 .empty-note{font-size:13px;color:var(--muted);text-align:center;padding:14px 0;}
 </style>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));
+}
+</script>
 </head>
 <body>
 
