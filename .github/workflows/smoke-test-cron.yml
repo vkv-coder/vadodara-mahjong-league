@@ -1,0 +1,19 @@
+name: Vadodara Mahjong League bot-confirm-flow smoke test
+
+on:
+  schedule:
+    # Every 4 hours - exercises the real bot create-match -> 3x independent
+    # confirm -> status-flip flow through anon-safe wrapper RPCs. Alerts to
+    # Telegram on any failure.
+    - cron: '23 */4 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node smoke-test-bot-confirm-flow.mjs
