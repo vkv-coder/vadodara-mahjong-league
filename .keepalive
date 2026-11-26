@@ -1,0 +1,2 @@
+Keepalive commit to prevent GitHub from auto-disabling the scheduled smoke-test workflow after 60 days of repo inactivity.
+Last touched: 2026-11-26
